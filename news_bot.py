@@ -16,22 +16,44 @@ from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator, MyMemoryTranslator
 from discord.ext import commands, tasks
 
-from settings import (
-    TOKEN,
-    GAMES_CHANNEL_ID,
-    ANIME_CHANNEL_ID,
-    MANGA_CHANNEL_ID,
-    MOVIES_CHANNEL_ID,
-    MUSIC_CHANNEL_ID,
-    CHECK_EVERY_MINUTES,
-    MAX_PER_FEED,
-    MAX_TEXT,
-)
+try:
+    import settings as _settings
+except ImportError:      # على GitHub ما فيه settings.py، الإعدادات تجي من Secrets
+    _settings = None
 
-import settings as _settings
 
-# صور افتراضية اختيارية (تُقرأ من settings.py، وإذا ما كانت موجودة ما يصير شيء)
-DEFAULT_IMAGES = getattr(_settings, "DEFAULT_IMAGES", {})
+def _cfg(name, default=None):
+    """يقرأ الإعداد من متغيرات البيئة (GitHub Secrets) ثم من settings.py."""
+    value = os.environ.get(name)
+    if value not in (None, ""):
+        return value
+    if _settings is not None:
+        return getattr(_settings, name, default)
+    return default
+
+
+def _cfg_int(name, default=0):
+    try:
+        return int(_cfg(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+TOKEN = _cfg("DISCORD_TOKEN") or _cfg("TOKEN")
+GAMES_CHANNEL_ID = _cfg_int("GAMES_CHANNEL_ID")
+ANIME_CHANNEL_ID = _cfg_int("ANIME_CHANNEL_ID")
+MANGA_CHANNEL_ID = _cfg_int("MANGA_CHANNEL_ID")
+MOVIES_CHANNEL_ID = _cfg_int("MOVIES_CHANNEL_ID")
+MUSIC_CHANNEL_ID = _cfg_int("MUSIC_CHANNEL_ID")
+CHECK_EVERY_MINUTES = _cfg_int("CHECK_EVERY_MINUTES", 30)
+MAX_PER_FEED = _cfg_int("MAX_PER_FEED", 2)
+MAX_TEXT = _cfg_int("MAX_TEXT", 1200)
+
+# RUN_ONCE=1 يعني: يشتغل مرة وحدة ويقفل (وضع GitHub Actions)
+RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
+
+# صور افتراضية اختيارية (من settings.py فقط)
+DEFAULT_IMAGES = getattr(_settings, "DEFAULT_IMAGES", {}) if _settings else {}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # كل قسم: اسمه، القناة، لون الشريط، المصادر، وكلمات اختيارية للتصفية
@@ -648,8 +670,7 @@ async def post_category(cat):
             await asyncio.sleep(3)
 
 
-@tasks.loop(minutes=CHECK_EVERY_MINUTES)
-async def news_loop():
+async def run_all_categories():
     for cat in CATEGORIES:
         try:
             await post_category(cat)
@@ -657,20 +678,42 @@ async def news_loop():
             print("Error in category", cat["name"], ":", e)
 
 
+@tasks.loop(minutes=CHECK_EVERY_MINUTES)
+async def news_loop():
+    await run_all_categories()
+
+
+_ready_done = False
+
+
 @bot.event
 async def on_ready():
+    global _ready_done
     print("Bot started:", bot.user)
+    if RUN_ONCE:
+        if _ready_done:
+            return
+        _ready_done = True
+        await run_all_categories()
+        print("Run finished, closing.")
+        await bot.close()
+        return
     if not news_loop.is_running():
         news_loop.start()
 
 
-# يمنع تشغيل نسختين من البوت بنفس الجهاز (وإلا ترسل الأخبار مرتين)
-_lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-try:
-    _lock.bind(("127.0.0.1", 48621))
-except OSError as e:
-    if e.errno in (98, 10048, 48):
-        print("Another copy of this bot is already running here. Close it first.")
-        sys.exit(1)
+if not TOKEN:
+    print("ERROR: no bot token found. Set DISCORD_TOKEN (GitHub Secret) or TOKEN in settings.py.")
+    sys.exit(1)
+
+if not RUN_ONCE:
+    # يمنع تشغيل نسختين من البوت بنفس الجهاز (وإلا ترسل الأخبار مرتين)
+    _lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        _lock.bind(("127.0.0.1", 48621))
+    except OSError as e:
+        if e.errno in (98, 10048, 48):
+            print("Another copy of this bot is already running here. Close it first.")
+            sys.exit(1)
 
 bot.run(TOKEN)
