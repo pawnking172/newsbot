@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import difflib
 import io
 import json
@@ -48,6 +49,11 @@ MUSIC_CHANNEL_ID = _cfg_int("MUSIC_CHANNEL_ID")
 CHECK_EVERY_MINUTES = _cfg_int("CHECK_EVERY_MINUTES", 30)
 MAX_PER_FEED = _cfg_int("MAX_PER_FEED", 2)
 MAX_TEXT = _cfg_int("MAX_TEXT", 1200)
+QUIET_MINUTES = _cfg_int("QUIET_MINUTES", 30)           # إذا القسم سكت أكثر من كذا دقيقة نرخّي الفلتر
+RELAXED_MAX = _cfg_int("RELAXED_MAX", 2)                # أقصى عدد "مختارات" لكل قسم في المرة
+RELAXED_TOTAL_PER_RUN = _cfg_int("RELAXED_TOTAL_PER_RUN", 4)  # أقصى عدد "مختارات" في المرة (كل الأقسام)
+RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 4)        # أقصى عدد "مختارات" لكل قسم في اليوم
+RELAXED_TAG = "مختارات"                                 # الكلمة اللي تظهر أسفل الأخبار الشبه أساسية
 
 # RUN_ONCE=1 يعني: يشتغل مرة وحدة ويقفل (وضع GitHub Actions)
 RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
@@ -110,6 +116,24 @@ CATEGORIES = [
                 r"\bgreatest\b.*\bgames?\b",
             ],
         ],
+        # المستوى الثاني (لما القسم يسكت): تقييمات، أرقام، قوائم أفضل الألعاب...
+        "relaxed_title_groups": [
+            [
+                r"\breview", r"metacritic", r"opencritic", r"\bscores?\b", r"\bratings?\b",
+                r"review bomb", r"backlash", r"mixed", r"negative", r"\bpositive",
+                r"\bbest\b", r"\bgreatest\b", r"\btop\b", r"\branked\b", r"\bworst\b",
+                r"most anticipated", r"\bsold\b", r"million (copies|players)", r"\brecord\b",
+                r"peak", r"\bsales\b",
+            ],
+        ],
+        "relaxed_block_title": [
+            r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b",
+            r"\bnetflix\b", r"\bhbo\b", r"\bdisney\+?", r"\bepisodes?\b", r"\bpodcast",
+            r"\bdocumentary", r"\bcomics?\b", r"\bguide\b", r"how to", r"\bwalkthrough",
+            r"\bdeals?\b", r"\bdiscount", r"\bcoupon", r"\bcosplay", r"\bmeme",
+            r"\blawsuit", r"\bsues?\b", r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b",
+            r"\bdies\b", r"\bobituar",
+        ],
         # يرفض العنوان إذا فيه: أفلام/مسلسلات/كتب، أو قوائم وشروحات ومواضيع جانبية
         "block_title": [
             r"^\d+\s", r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b",
@@ -146,6 +170,25 @@ CATEGORIES = [
                 r"\breview", r"\bfestival", r"\boscars?\b", r"\bgreenlit", r"coming (to|in)",
                 r"in theaters", r"\bdebuts?",
             ],
+        ],
+        # المستوى الثاني (لما القسم يسكت): قوائم أفضل الأفلام، تقييمات، أرقام...
+        "relaxed_title_groups": [
+            [
+                r"\bbest\b", r"\bgreatest\b", r"\btop\b", r"\branked\b", r"\bworst\b",
+                r"\bunderrated", r"\bclassics?\b", r"must[- ]watch", r"rotten tomatoes",
+                r"\bscores?\b", r"\bratings?\b", r"\breview", r"\brecord\b",
+                r"highest[- ]grossing", r"\bgrossing\b", r"\bmasterpiece",
+            ],
+        ],
+        "relaxed_block_title": [
+            r"\bdating\b", r"\bdivorc", r"\bmarri", r"\bwedding", r"\bengag", r"\bpregnan",
+            r"\bbaby\b", r"\barrest", r"\blawsuit", r"\bsues?\b", r"\bfeud", r"net worth",
+            r"\bdies\b", r"\bdeath\b", r"\bdead\b", r"obituar", r"funeral", r"\brehab",
+            r"scandal", r"break ?up", r"\bsplit\b", r"instagram", r"tiktok", r"red carpet",
+            r"\boutfit", r"\bfashion", r"\bactors?\b", r"\bactress", r"predictions?",
+            r"contenders", r"season \d", r"\bepisode", r"showrunner", r"\bsitcom",
+            r"tv series", r"tv show", r"series finale", r"\blayoffs?\b", r"\bstock\b",
+            r"\bearnings\b", r"\bconcert", r"\bsong\b", r"\balbum",
         ],
         # يرفض العنوان إذا فيه: أخبار ممثلين شخصية، مسلسلات، قوائم، ذكريات قديمة، أعمال
         "block_title": [
@@ -313,6 +356,10 @@ class TranslationUnavailable(Exception):
     """الترجمة معطلة الآن (قوقل حاظرنا مؤقتاً مثلاً)."""
 
 
+last_post_at = {}      # آخر وقت نزل فيه خبر لكل قسم
+relaxed_recent = {}    # أوقات آخر أخبار "مختارات" لكل قسم (نقرأها من القناة نفسها)
+relaxed_run_total = 0  # كم "مختارات" نزلت في هذا التشغيل
+history_ok = {}        # هل قدرنا نقرأ سجل القناة (عشان نعرف آخر وقت)
 _translation_pause_until = 0.0   # إذا فشلت الترجمة نوقف الإرسال شوي بدل ما نرسل إنجليزي
 TRANSLATION_PAUSE_SECONDS = 15 * 60
 
@@ -594,8 +641,10 @@ def find_anime_image(text, kind):
     return None
 
 
-def passes_filter(entry, cat):
-    """هل الخبر يناسب القسم؟ (كلمات مطلوبة + مجموعات إلزامية + كلمات ممنوعة في العنوان)"""
+def passes_filter(entry, cat, relaxed=False):
+    """هل الخبر يناسب القسم؟
+    relaxed=False: الفلتر الشديد (أخبار مهمة وجديدة).
+    relaxed=True : فلتر أرخى لأخبار "شبه أساسية" (قوائم أفضل أفلام، تقييمات...)."""
     title = entry.get("title", "").lower()
     text = title + " " + clean_html(entry.get("summary", "")).lower()
 
@@ -607,19 +656,107 @@ def passes_filter(entry, cat):
         if not any(re.search(pat, text) for pat in group):
             return False
 
-    # مجموعات لازم تظهر في العنوان نفسه (أدق من البحث في كل النص)
-    for group in cat.get("require_title_groups") or []:
+    # مجموعات لازم تظهر في العنوان نفسه
+    if relaxed:
+        title_groups = cat.get("relaxed_title_groups") or []
+        block = cat.get("relaxed_block_title", cat.get("block_title")) or []
+    else:
+        title_groups = cat.get("require_title_groups") or []
+        block = cat.get("block_title") or []
+
+    for group in title_groups:
         if not any(re.search(pat, title) for pat in group):
             return False
-
-    for pat in cat.get("block_title") or []:
+    for pat in block:
         if re.search(pat, title):
             return False
     return True
 
 
-async def post_category(cat):
+def hours_since_last_post(cat):
+    """كم ساعة مرت من آخر خبر في القسم (None إذا القناة فاضية)."""
+    t = last_post_at.get(cat["key"])
+    if t is None:
+        return None
+    return (discord.utils.utcnow() - t).total_seconds() / 3600
+
+
+async def send_entry(cat, channel, entry, relaxed=False):
+    """يجهّز الخبر (صورة + ترجمة) ويرسله. يرفع TranslationUnavailable إذا الترجمة معطلة."""
+    link = entry.get("link")
+    summary = clean_html(entry.get("summary", ""))
+    image = feed_image(entry)
+
+    if image is None or len(summary) < 300:
+        page_image, page_text = await asyncio.to_thread(fetch_page, link)
+        image = image or page_image
+        if len(summary) < 300 and page_text:
+            summary = page_text
+
+    if image is None and cat["key"] in ("anime", "manga"):
+        look_in = entry.get("title", "") + ". " + summary
+        image = await asyncio.to_thread(find_anime_image, look_in, cat["key"])
+
+    if image:
+        print("Image found:", image)
+    else:
+        print("No image found for:", link)
+
+    title, body = await asyncio.to_thread(
+        translate_pair,
+        entry.get("title", ""),
+        trim_to_sentence(summary, MAX_TEXT),
+    )
+    mark_seen(entry)
+
+    description = f"**{title}**\n\n{body}\n\n[المصدر]({link})"
+    embed = discord.Embed(description=description[:4000], color=cat["color"])
+    embed.set_footer(text=cat["name"] + (f" · {RELAXED_TAG}" if relaxed else ""))
+
+    file = None
+    if image:
+        data = await asyncio.to_thread(download_image, image, link)
+        if data:
+            filename = f"news.{data[1]}"
+            file = discord.File(io.BytesIO(data[0]), filename=filename)
+            embed.set_image(url=f"attachment://{filename}")
+
+    if file is None:
+        file = default_image_file(cat)
+        if file:
+            embed.set_image(url=f"attachment://{file.filename}")
+        elif image:
+            embed.set_image(url=image)
+
+    try:
+        if file:
+            await channel.send(embed=embed, file=file)
+        else:
+            await channel.send(embed=embed)
+    except discord.Forbidden:
+        print("Missing permission! Give the bot 'Attach Files' in this channel/role.")
+        if image:
+            embed.set_image(url=image)
+        else:
+            embed.remove_image()
+        await channel.send(embed=embed)
+
+    now_utc = discord.utils.utcnow()
+    last_post_at[cat["key"]] = now_utc
+    if relaxed:
+        relaxed_recent.setdefault(cat["key"], []).append(now_utc)
+    await asyncio.sleep(3)
+    return True
+
+
+def _pause_translation():
     global _translation_pause_until
+    _translation_pause_until = time.monotonic() + TRANSLATION_PAUSE_SECONDS
+    print("Translation unavailable: NOT posting English news. Will retry in 15 minutes.")
+
+
+async def post_category(cat):
+    global relaxed_run_total
     channel_id = cat["channel"]
     if not channel_id:
         return
@@ -631,14 +768,18 @@ async def post_category(cat):
         print(f"Channel not found: {channel_id} ({cat['name']}). Check the ID and bot permissions.")
         return
 
+    parsed_feeds = []
+    posted_total = 0
+
+    # ---- المستوى الأول: الأخبار المهمة (الفلتر الشديد)
     for url in cat["feeds"]:
         feed = await asyncio.to_thread(feedparser.parse, url)
         if not feed.entries:
             print("No entries from this feed (maybe the link is wrong):", url)
             continue
+        parsed_feeds.append(feed)
 
-        posted = 0
-        scanned = dup = blocked = 0
+        posted = scanned = dup = blocked = 0
         blocked_samples = []
         for entry in feed.entries[:SCAN_ENTRIES]:
             if posted >= MAX_PER_FEED:
@@ -653,77 +794,63 @@ async def post_category(cat):
                 if len(blocked_samples) < 3:
                     blocked_samples.append(entry.get("title", "")[:90])
                 continue
-
-            summary = clean_html(entry.get("summary", ""))
-            image = feed_image(entry)
-
-            if image is None or len(summary) < 300:
-                page_image, page_text = await asyncio.to_thread(fetch_page, link)
-                image = image or page_image
-                if len(summary) < 300 and page_text:
-                    summary = page_text
-
-            if image is None and cat["key"] in ("anime", "manga"):
-                look_in = entry.get("title", "") + ". " + summary
-                image = await asyncio.to_thread(find_anime_image, look_in, cat["key"])
-
-            if image:
-                print("Image found:", image)
-            else:
-                print("No image found for:", link)
-
             try:
-                title, body = await asyncio.to_thread(
-                    translate_pair,
-                    entry.get("title", ""),
-                    trim_to_sentence(summary, MAX_TEXT),
-                )
+                await send_entry(cat, channel, entry)
             except TranslationUnavailable:
-                _translation_pause_until = time.monotonic() + TRANSLATION_PAUSE_SECONDS
-                print("Translation unavailable: NOT posting English news. "
-                      "Will retry in 15 minutes.")
+                _pause_translation()
                 return
-            mark_seen(entry)
-
-            description = f"**{title}**\n\n{body}\n\n[المصدر]({link})"
-            embed = discord.Embed(description=description[:4000], color=cat["color"])
-            embed.set_footer(text=cat["name"])
-
-            file = None
-            if image:
-                data = await asyncio.to_thread(download_image, image, link)
-                if data:
-                    filename = f"news.{data[1]}"
-                    file = discord.File(io.BytesIO(data[0]), filename=filename)
-                    embed.set_image(url=f"attachment://{filename}")
-
-            if file is None:
-                file = default_image_file(cat)
-                if file:
-                    embed.set_image(url=f"attachment://{file.filename}")
-                elif image:
-                    embed.set_image(url=image)
-
-            try:
-                if file:
-                    await channel.send(embed=embed, file=file)
-                else:
-                    await channel.send(embed=embed)
-            except discord.Forbidden:
-                print("Missing permission! Give the bot 'Attach Files' in this channel/role.")
-                if image:
-                    embed.set_image(url=image)
-                else:
-                    embed.remove_image()
-                await channel.send(embed=embed)
             posted += 1
-            await asyncio.sleep(3)
 
-        # ملخص لكل مصدر عشان نعرف وش صار بالضبط
+        posted_total += posted
         print(f"[{cat['key']}] {url} -> scanned {scanned}, already sent {dup}, "
               f"blocked by filter {blocked}, posted {posted}")
         for t in blocked_samples:
             print("      blocked e.g.:", t)
+
+    # ---- المستوى الثاني: إذا القسم ساكت، ننزل خبر "شبه أساسي" (قائمة أفضل، تقييم...)
+    if posted_total or not cat.get("relaxed_title_groups"):
+        return
+    if not history_ok.get(cat["key"]):
+        return   # ما نقدر نعرف آخر وقت نزل فيه خبر، فلا نغامر
+    quiet = hours_since_last_post(cat)
+    if quiet is not None and quiet * 60 < QUIET_MINUTES:
+        return
+
+    # سقف "المختارات": لكل قسم في المرة، وللكل في المرة، ولكل قسم في اليوم
+    day_ago = discord.utils.utcnow() - datetime.timedelta(hours=24)
+    done_today = len([t for t in relaxed_recent.get(cat["key"], []) if t > day_ago])
+    allowed = min(
+        RELAXED_MAX,
+        RELAXED_PER_DAY - done_today,
+        RELAXED_TOTAL_PER_RUN - relaxed_run_total,
+    )
+    if allowed <= 0:
+        print(f"[{cat['key']}] quiet, but the '{RELAXED_TAG}' limit is reached "
+              f"(today {done_today}/{RELAXED_PER_DAY}, this run {relaxed_run_total}/{RELAXED_TOTAL_PER_RUN})")
+        return
+
+    shown = "no previous posts" if quiet is None else f"{quiet * 60:.0f} min"
+    print(f"[{cat['key']}] quiet ({shown}) -> trying the relaxed filter (up to {allowed})")
+    relaxed_posted = 0
+    for feed in parsed_feeds:
+        for entry in feed.entries[:SCAN_ENTRIES]:
+            if relaxed_posted >= allowed:
+                break
+            link = entry.get("link")
+            if not link or is_duplicate(entry):
+                continue
+            if not passes_filter(entry, cat, relaxed=True):
+                continue
+            try:
+                await send_entry(cat, channel, entry, relaxed=True)
+            except TranslationUnavailable:
+                _pause_translation()
+                return
+            relaxed_posted += 1
+            relaxed_run_total += 1
+            print(f"[{cat['key']}] relaxed post:", entry.get("title", "")[:90])
+        if relaxed_posted >= allowed:
+            break
 
 
 async def preload_seen_from_channels():
@@ -741,12 +868,18 @@ async def preload_seen_from_channels():
             async for msg in channel.history(limit=100):
                 if msg.author.id != bot.user.id:
                     continue
+                if cat["key"] not in last_post_at:    # أول رسالة نمرّ عليها هي الأحدث
+                    last_post_at[cat["key"]] = msg.created_at
                 for emb in msg.embeds:
+                    footer = getattr(getattr(emb, "footer", None), "text", None) or ""
+                    if RELAXED_TAG in footer:
+                        relaxed_recent.setdefault(cat["key"], []).append(msg.created_at)
                     for link in re.findall(r"\]\((https?://[^)\s]+)\)", emb.description or ""):
                         key = normalize_url(link)
                         if key not in seen_links:
                             seen_links[key] = None
                             added += 1
+            history_ok[cat["key"]] = True
         except discord.Forbidden:
             print("Cannot read history in", cat["name"],
                   "- give the bot 'Read Message History' for extra duplicate protection.")
@@ -756,6 +889,8 @@ async def preload_seen_from_channels():
 
 
 async def run_all_categories():
+    global relaxed_run_total
+    relaxed_run_total = 0
     for cat in CATEGORIES:
         try:
             await post_category(cat)
