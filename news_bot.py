@@ -638,13 +638,20 @@ async def post_category(cat):
             continue
 
         posted = 0
+        scanned = dup = blocked = 0
+        blocked_samples = []
         for entry in feed.entries[:SCAN_ENTRIES]:
             if posted >= MAX_PER_FEED:
                 break
+            scanned += 1
             link = entry.get("link")
             if not link or is_duplicate(entry):
+                dup += 1
                 continue
             if not passes_filter(entry, cat):
+                blocked += 1
+                if len(blocked_samples) < 3:
+                    blocked_samples.append(entry.get("title", "")[:90])
                 continue
 
             summary = clean_html(entry.get("summary", ""))
@@ -711,6 +718,12 @@ async def post_category(cat):
                 await channel.send(embed=embed)
             posted += 1
             await asyncio.sleep(3)
+
+        # ملخص لكل مصدر عشان نعرف وش صار بالضبط
+        print(f"[{cat['key']}] {url} -> scanned {scanned}, already sent {dup}, "
+              f"blocked by filter {blocked}, posted {posted}")
+        for t in blocked_samples:
+            print("      blocked e.g.:", t)
 
 
 async def preload_seen_from_channels():
