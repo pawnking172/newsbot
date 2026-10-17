@@ -713,6 +713,35 @@ async def post_category(cat):
             await asyncio.sleep(3)
 
 
+async def preload_seen_from_channels():
+    """يقرأ آخر رسائل البوت في القنوات ويسجّل روابط أخبارها كأنها انرسلت.
+    حماية من التكرار حتى لو فشل حفظ seen.json (مهم على GitHub Actions)."""
+    added = 0
+    for cat in CATEGORIES:
+        cid = cat["channel"]
+        if not cid:
+            continue
+        channel = bot.get_channel(cid)
+        if channel is None:
+            continue
+        try:
+            async for msg in channel.history(limit=100):
+                if msg.author.id != bot.user.id:
+                    continue
+                for emb in msg.embeds:
+                    for link in re.findall(r"\]\((https?://[^)\s]+)\)", emb.description or ""):
+                        key = normalize_url(link)
+                        if key not in seen_links:
+                            seen_links[key] = None
+                            added += 1
+        except discord.Forbidden:
+            print("Cannot read history in", cat["name"],
+                  "- give the bot 'Read Message History' for extra duplicate protection.")
+        except Exception as e:
+            print("Could not read history for", cat["name"], ":", e)
+    print("Loaded", added, "links from recent channel messages")
+
+
 async def run_all_categories():
     for cat in CATEGORIES:
         try:
@@ -737,11 +766,13 @@ async def on_ready():
         if _ready_done:
             return
         _ready_done = True
+        await preload_seen_from_channels()
         await run_all_categories()
         print("Run finished, closing.")
         await bot.close()
         return
     if not news_loop.is_running():
+        await preload_seen_from_channels()
         news_loop.start()
 
 
