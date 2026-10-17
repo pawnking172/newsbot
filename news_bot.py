@@ -90,6 +90,38 @@ CATEGORIES = [
             "https://www.polygon.com/rss/index.xml",
         ],
         "keywords": None,
+        # لازم الخبر يتكلم عن ألعاب
+        "require_groups": [
+            [
+                r"\bgames?\b", r"\bgaming\b", r"playstation", r"\bps[45]\b", r"xbox",
+                r"nintendo", r"\bswitch\b", r"\bsteam\b", r"\bdlc\b", r"\bconsoles?\b",
+            ],
+        ],
+        # ولازم العنوان يدل على حدث مهم: إصدار/إعلان/تريلر/تحديث كبير/مراجعة...
+        "require_title_groups": [
+            [
+                r"release date", r"\blaunch", r"\bannounc", r"\breveal", r"\btrailer",
+                r"\bgameplay", r"\bdelay", r"\breview", r"\bupdate", r"\bpatch",
+                r"\bdlc\b", r"expansion", r"\bremake", r"\bremaster", r"\bsequel",
+                r"\bbeta\b", r"early access", r"game awards", r"\bgoty\b",
+                r"game of the year", r"coming (to|in|out)", r"\bout now", r"available now",
+                r"\bpreview", r"\bdemo\b", r"shadow ?drop", r"nintendo direct",
+                r"state of play", r"showcase", r"\bfree\b", r"\bbest\b.*\bgames?\b",
+                r"\bgreatest\b.*\bgames?\b",
+            ],
+        ],
+        # يرفض العنوان إذا فيه: أفلام/مسلسلات/كتب، أو قوائم وشروحات ومواضيع جانبية
+        "block_title": [
+            r"^\d+\s", r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b",
+            r"\bnetflix\b", r"\bhbo\b", r"\bdisney\+?", r"\bepisodes?\b", r"\bsitcom",
+            r"\bpodcast", r"\bdocumentary", r"\bcomics?\b",
+            r"\bguide\b", r"how to", r"\bwhere to\b", r"\bwalkthrough", r"\btips?\b",
+            r"tier list", r"\bexplained\b", r"easter eggs?", r"\bdeals?\b", r"\bdiscount",
+            r"\bcoupon", r"\bcosplay", r"\bmeme", r"\bfans? (react|react|are)\b", r"\btweet",
+            r"\breddit\b", r"\bstreamer", r"\btwitch\b", r"\byoutuber",
+            r"\blawsuit", r"\bsues?\b", r"\blayoffs?\b", r"\bunion\b", r"\bstock\b",
+            r"\bearnings\b", r"\bdies\b", r"\bobituar",
+        ],
     },
     {
         "name": "أخبار الأفلام",
@@ -101,19 +133,25 @@ CATEGORIES = [
             "https://deadline.com/feed/",
         ],
         "keywords": None,
-        # لازم الخبر يحقق كل مجموعة: (يذكر فيلم) + (يخص إصدار/تريلر/إيرادات/مراجعة...)
+        # لازم الخبر يتكلم عن فيلم
         "require_groups": [
             [r"\bfilm", r"\bmovie"],
+        ],
+        # ولازم العنوان يدل على: إصدار/تريلر/إيرادات/مراجعة/مهرجان/أوسكار...
+        "require_title_groups": [
             [
-                r"\btrailer", r"\bteaser", r"\brelease", r"box office", r"opening weekend",
-                r"\bpremiere", r"\bsequel", r"\bprequel", r"\breboot", r"\bremake",
-                r"first look", r"\bposter", r"\breview", r"theaters|theatres|theatrical",
-                r"\bstreaming", r"festival", r"\boscar", r"\bbest\b", r"\branked",
-                r"coming to", r"\bdebut",
+                r"\btrailer", r"\bteaser", r"release date", r"sets? release", r"box office",
+                r"opening weekend", r"opens? (to|with|in)", r"\bpremiere", r"\bsequel",
+                r"\bprequel", r"\breboot", r"\bremake", r"first look", r"\bposter",
+                r"\breview", r"\bfestival", r"\boscars?\b", r"\bgreenlit", r"coming (to|in)",
+                r"in theaters", r"\bdebuts?",
             ],
         ],
-        # يرفض الخبر إذا عنوانه فيه واحدة من هذي (أخبار ممثلين شخصية، مسلسلات، أعمال)
+        # يرفض العنوان إذا فيه: أخبار ممثلين شخصية، مسلسلات، قوائم، ذكريات قديمة، أعمال
         "block_title": [
+            r"^\d+\s", r"years? (ago|later)", r"\banniversary", r"\brewatch", r"\bunderrated",
+            r"\bforgotten", r"\bclassic\b", r"\bdecades?\b", r"\bflop\b", r"retrospective",
+            r"throwback", r"\bexplained\b", r"\bending\b", r"of all time", r"\branked\b",
             r"\bdating\b", r"\bdivorc", r"\bmarri", r"\bwedding", r"\bengag", r"\bpregnan",
             r"\bbaby\b", r"\barrest", r"\blawsuit", r"\bsues?\b", r"\bfeud", r"net worth",
             r"\bdies\b", r"\bdeath\b", r"\bdead\b", r"obituar", r"funeral", r"\brehab",
@@ -567,6 +605,11 @@ def passes_filter(entry, cat):
 
     for group in cat.get("require_groups") or []:
         if not any(re.search(pat, text) for pat in group):
+            return False
+
+    # مجموعات لازم تظهر في العنوان نفسه (أدق من البحث في كل النص)
+    for group in cat.get("require_title_groups") or []:
+        if not any(re.search(pat, title) for pat in group):
             return False
 
     for pat in cat.get("block_title") or []:
