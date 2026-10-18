@@ -53,6 +53,7 @@ QUIET_MINUTES = _cfg_int("QUIET_MINUTES", 30)           # إذا القسم سك
 RELAXED_MAX = _cfg_int("RELAXED_MAX", 2)                # أقصى عدد "مختارات" لكل قسم في المرة
 RELAXED_TOTAL_PER_RUN = _cfg_int("RELAXED_TOTAL_PER_RUN", 4)  # أقصى عدد "مختارات" في المرة (كل الأقسام)
 RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 4)        # أقصى عدد "مختارات" لكل قسم في اليوم
+MAX_PER_CATEGORY = _cfg_int("MAX_PER_CATEGORY", 4)      # أقصى عدد أخبار لكل قسم في المرة الواحدة
 RELAXED_TAG = "مختارات"                                 # الكلمة اللي تظهر أسفل الأخبار الشبه أساسية
 
 # RUN_ONCE=1 يعني: يشتغل مرة وحدة ويقفل (وضع GitHub Actions)
@@ -153,7 +154,16 @@ CATEGORIES = [
         "channel": GAMES_CHANNEL_ID,
         "color": 0x5865F2,
         "feeds": [
-            "https://www.gamespot.com/feeds/news/",
+            # مواقع كلها ألعاب: نقبل كل أخبارها إلا اللي في قائمة المنع (حد أقصى 1 لكل مصدر)
+            {"url": "https://www.gamespot.com/feeds/news/", "loose": True, "max": 1},
+            {"url": "https://www.eurogamer.net/feed/news", "loose": True, "max": 1},
+            # ألعاب مستقلة (Indie): لازم الخبر يذكر indie أو demo أو early access...
+            {"url": "https://www.rockpapershotgun.com/feed/news", "loose": True, "max": 1,
+             "require_any": [r"\bindie\b", r"early access", r"\bdemo\b", r"kickstarter",
+                             r"next fest", r"solo dev", r"small studio", r"\bwishlist",
+                             r"debut game", r"first game"]},
+            {"url": "https://indiegamesplus.com/feed", "loose": True, "max": 1},
+            # موقع مختلط (أفلام وكتب): يبقى بالفلتر الشديد
             "https://www.polygon.com/rss/index.xml",
         ],
         "keywords": None,
@@ -702,20 +712,29 @@ def find_anime_image(text, kind):
     return None
 
 
-def passes_filter(entry, cat, relaxed=False):
+def passes_filter(entry, cat, relaxed=False, opts=None):
     """هل الخبر يناسب القسم؟
     relaxed=False: الفلتر الشديد (أخبار مهمة وجديدة).
     relaxed=True : فلتر أرخى لأخبار "شبه أساسية" (قوائم أفضل أفلام، تقييمات...)."""
     title = entry.get("title", "").lower()
     text = title + " " + clean_html(entry.get("summary", "")).lower()
 
+    opts = opts or {}
+    loose = bool(opts.get("loose")) and not relaxed   # مصدر كله مواضيع القسم: نكتفي بقوائم المنع
+
     keywords = cat.get("keywords")
     if keywords and not any(k in text for k in keywords):
         return False
 
-    for group in cat.get("require_groups") or []:
-        if not any(re.search(pat, text) for pat in group):
-            return False
+    # شرط خاص بمصدر معيّن (مثلاً: لازم يذكر indie)
+    require_any = opts.get("require_any")
+    if require_any and not any(re.search(pat, text) for pat in require_any):
+        return False
+
+    if not loose:
+        for group in cat.get("require_groups") or []:
+            if not any(re.search(pat, text) for pat in group):
+                return False
 
     # مجموعات لازم تظهر في العنوان نفسه
     if relaxed:
@@ -725,9 +744,10 @@ def passes_filter(entry, cat, relaxed=False):
         title_groups = cat.get("require_title_groups") or []
         block = cat.get("block_title") or []
 
-    for group in title_groups:
-        if not any(re.search(pat, title) for pat in group):
-            return False
+    if not loose:
+        for group in title_groups:
+            if not any(re.search(pat, title) for pat in group):
+                return False
     for pat in block:
         if re.search(pat, title):
             return False
@@ -836,24 +856,27 @@ async def post_category(cat):
     posted_total = 0
 
     # ---- المستوى الأول: الأخبار المهمة (الفلتر الشديد)
-    for url in cat["feeds"]:
+    for spec in cat["feeds"]:
+        spec = spec if isinstance(spec, dict) else {"url": spec}
+        url = spec["url"]
+        feed_limit = spec.get("max", MAX_PER_FEED)
         feed = await asyncio.to_thread(feedparser.parse, url)
         if not feed.entries:
             print("No entries from this feed (maybe the link is wrong):", url)
             continue
-        parsed_feeds.append(feed)
+        parsed_feeds.append((spec, feed))
 
         posted = scanned = dup = blocked = 0
         blocked_samples = []
         for entry in feed.entries[:SCAN_ENTRIES]:
-            if posted >= MAX_PER_FEED:
+            if posted >= feed_limit or posted_total + posted >= MAX_PER_CATEGORY:
                 break
             scanned += 1
             link = entry.get("link")
             if not link or is_duplicate(entry):
                 dup += 1
                 continue
-            if not passes_filter(entry, cat):
+            if not passes_filter(entry, cat, opts=spec):
                 blocked += 1
                 if len(blocked_samples) < 3:
                     blocked_samples.append(entry.get("title", "")[:90])
@@ -896,14 +919,14 @@ async def post_category(cat):
     shown = "no previous posts" if quiet is None else f"{quiet * 60:.0f} min"
     print(f"[{cat['key']}] quiet ({shown}) -> trying the relaxed filter (up to {allowed})")
     relaxed_posted = 0
-    for feed in parsed_feeds:
+    for spec, feed in parsed_feeds:
         for entry in feed.entries[:SCAN_ENTRIES]:
             if relaxed_posted >= allowed:
                 break
             link = entry.get("link")
             if not link or is_duplicate(entry):
                 continue
-            if not passes_filter(entry, cat, relaxed=True):
+            if not passes_filter(entry, cat, relaxed=True, opts=spec):
                 continue
             try:
                 await send_entry(cat, channel, entry, relaxed=True)
