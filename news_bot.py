@@ -62,6 +62,28 @@ RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
 DEFAULT_IMAGES = getattr(_settings, "DEFAULT_IMAGES", {}) if _settings else {}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# ممنوع في الأنمي والمانجا: حياة شخصية للممثلين والفنانين، وفيات، فضائح، ومواضيع جانبية
+ANIME_BLOCK_TITLE = [
+    r"\bpregnan", r"\b(gives?|gave) birth\b", r"\bfirst (child|baby)\b", r"\bsecond (child|baby)\b",
+    r"\bexpecting (a|her|his|their|first|second)\b",
+    r"\bgets? married\b", r"\bgot married\b", r"\bmarries\b",
+    r"\b(announces?|reveals?) (her|his|their) (marriage|engagement|wedding|divorce|pregnancy)\b",
+    r"\bengaged\b", r"\bdivorc", r"\bdating\b",
+    r"\b(voice actor|voice actress|actor|actress|seiyuu|idol|singer|mangaka|creator|director|composer|author|artist)\b"
+    r".*\b(dies|passes away|passed away|has died|hospitalized|diagnosed|arrested)\b",
+    r"\bobituar", r"\bfuneral\b", r"\bscandal\b", r"\barrest(ed|s)?\b", r"\bfeud\b",
+    r"\blawsuit\b", r"\bsues?\b", r"\bbirthday\b",
+    r"\bcosplay", r"\bmeme", r"\btiktok", r"\binstagram",
+    r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b",
+    r"\bkickstarter", r"\bcrowdfund", r"\bmerch", r"\bfigures?\b", r"\bgoods\b",
+    r"\bcollab", r"\bcafe\b", r"\bpop-?up\b",
+]
+ANIME_BLOCK_TEXT = [
+    r"\bis pregnant\b", r"\bgave birth\b", r"\bgives birth\b", r"\bpregnancy\b",
+    r"\btheir (first|second) child\b", r"\b(her|his) marriage\b", r"\bgot married\b",
+    r"\bannounced (her|his|their) (marriage|engagement)\b",
+]
+
 # كل قسم: اسمه، القناة، لون الشريط، المصادر، وكلمات اختيارية للتصفية
 CATEGORIES = [
     {
@@ -74,6 +96,25 @@ CATEGORIES = [
             "https://otakuusamagazine.com/feed/",
         ],
         "keywords": ["manga", "manhwa", "manhua", "light novel", "webtoon"],
+        # أخبار مهمة: إعلانات، اقتباس أنمي، نهاية مانجا، توقف، جوائز، مبيعات ضخمة
+        "require_title_groups": [
+            [
+                r"\bannounc", r"\breveal", r"\bgets?\b", r"\banime\b", r"\badaptation", r"live-action",
+                r"\bfinal\b", r"\bending\b", r"\bends\b", r"\bhiatus", r"\bresum", r"\bsequel",
+                r"spin-?off", r"\bnew manga\b", r"\bserializ", r"\blaunch", r"\bvolumes?\b",
+                r"\bwins?\b", r"\bawards?\b", r"\bnominee", r"million copies", r"\bcomplete",
+                r"\bconclude", r"\bcancel", r"\bdelay", r"\bfilm\b", r"\bmovie\b",
+            ],
+        ],
+        # لما القسم يسكت: مبيعات، ترتيبات، أفضل المانجا، مراجعات
+        "relaxed_title_groups": [
+            [
+                r"\brank", r"\bsales\b", r"\bbest\b", r"\btop\b", r"best-?sell", r"\breview",
+                r"\bawards?\b", r"\bmost\b", r"\bpoll\b", r"\bsurvey\b", r"\bmillion\b",
+            ],
+        ],
+        "block_title": ANIME_BLOCK_TITLE,
+        "block_text": ANIME_BLOCK_TEXT,
     },
     {
         "name": "أخبار الأنمي",
@@ -85,6 +126,26 @@ CATEGORIES = [
             "https://myanimelist.net/rss/news.xml",
         ],
         "keywords": None,
+        # أخبار مهمة: أنمي جديد، موسم، تريلر، موعد عرض، فيلم، تأجيل، فريق العمل...
+        "require_title_groups": [
+            [
+                r"\bannounc", r"\breveal", r"\bseasons?\b", r"\bsequel", r"\bnew anime\b",
+                r"\banime\b.*\b(gets|reveals|announces|premieres|debuts|returns|ends|delayed|confirmed)\b",
+                r"\bgets?\b.*\b(anime|season|film|movie|ova)\b", r"\bpremiere", r"\btrailer",
+                r"\bpv\b", r"\bvisual\b", r"release date", r"\bto (premiere|debut|air|launch|return|stream)\b",
+                r"\bdelay", r"\bfilm\b", r"\bmovie\b", r"\bova\b", r"\bcast\b", r"\bstaff\b",
+                r"\bconfirm", r"\breturns?\b", r"\bfinale\b", r"\bending\b", r"\bstreaming\b",
+            ],
+        ],
+        # لما القسم يسكت: ترتيبات، مبيعات، جوائز، أفضل الأنمي، مراجعات
+        "relaxed_title_groups": [
+            [
+                r"\brank", r"\bsales\b", r"\bbest\b", r"\btop\b", r"\bawards?\b", r"\breview",
+                r"box office", r"\bviewership", r"\bpoll\b", r"\bsurvey\b", r"\bmost\b", r"\bmillion\b",
+            ],
+        ],
+        "block_title": ANIME_BLOCK_TITLE,
+        "block_text": ANIME_BLOCK_TEXT,
     },
     {
         "name": "أخبار الألعاب",
@@ -669,6 +730,9 @@ def passes_filter(entry, cat, relaxed=False):
             return False
     for pat in block:
         if re.search(pat, title):
+            return False
+    for pat in cat.get("block_text") or []:
+        if re.search(pat, text):
             return False
     return True
 
