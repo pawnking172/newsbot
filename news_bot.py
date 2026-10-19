@@ -17,6 +17,12 @@ from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator, MyMemoryTranslator
 from discord.ext import commands, tasks
 
+# يخلي رسائل السجل تظهر فوراً في GitHub (بدل ما تتأخر لين يخلص التشغيل)
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 try:
     import settings as _settings
 except ImportError:      # على GitHub ما فيه settings.py، الإعدادات تجي من Secrets
@@ -127,6 +133,11 @@ CATEGORIES = [
             "https://myanimelist.net/rss/news.xml",
         ],
         "keywords": None,
+        # لازم الخبر يتكلم عن أنمي فعلاً (يمنع أفلام الممثلين الحقيقيين وأخبار الألعاب)
+        "require_groups": [
+            [r"\banime\b", r"\bova\b", r"\bona\b", r"crunchyroll", r"ghibli",
+             r"\bseiyuu\b", r"\bvoice (actor|actress)\b"],
+        ],
         # أخبار مهمة: أنمي جديد، موسم، تريلر، موعد عرض، فيلم، تأجيل، فريق العمل...
         "require_title_groups": [
             [
@@ -145,7 +156,7 @@ CATEGORIES = [
                 r"box office", r"\bviewership", r"\bpoll\b", r"\bsurvey\b", r"\bmost\b", r"\bmillion\b",
             ],
         ],
-        "block_title": ANIME_BLOCK_TITLE,
+        "block_title": ANIME_BLOCK_TITLE + [r"\blive-?action\b"],
         "block_text": ANIME_BLOCK_TEXT,
     },
     {
