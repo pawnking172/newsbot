@@ -56,10 +56,10 @@ CHECK_EVERY_MINUTES = _cfg_int("CHECK_EVERY_MINUTES", 30)
 MAX_PER_FEED = _cfg_int("MAX_PER_FEED", 2)
 MAX_TEXT = _cfg_int("MAX_TEXT", 1200)
 QUIET_MINUTES = _cfg_int("QUIET_MINUTES", 30)           # إذا القسم سكت أكثر من كذا دقيقة نرخّي الفلتر
-RELAXED_MAX = _cfg_int("RELAXED_MAX", 2)                # أقصى عدد "مختارات" لكل قسم في المرة
-RELAXED_TOTAL_PER_RUN = _cfg_int("RELAXED_TOTAL_PER_RUN", 4)  # أقصى عدد "مختارات" في المرة (كل الأقسام)
-RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 4)        # أقصى عدد "مختارات" لكل قسم في اليوم
-MAX_PER_CATEGORY = _cfg_int("MAX_PER_CATEGORY", 4)      # أقصى عدد أخبار لكل قسم في المرة الواحدة
+RELAXED_MAX = _cfg_int("RELAXED_MAX", 3)                # أقصى عدد "مختارات" لكل قسم في المرة
+RELAXED_TOTAL_PER_RUN = _cfg_int("RELAXED_TOTAL_PER_RUN", 8)  # أقصى عدد "مختارات" في المرة (كل الأقسام)
+RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 8)        # أقصى عدد "مختارات" لكل قسم في اليوم
+MAX_PER_CATEGORY = _cfg_int("MAX_PER_CATEGORY", 6)      # أقصى عدد أخبار لكل قسم في المرة الواحدة
 RELAXED_TAG = "مختارات"                                 # الكلمة اللي تظهر أسفل الأخبار الشبه أساسية
 
 # RUN_ONCE=1 يعني: يشتغل مرة وحدة ويقفل (وضع GitHub Actions)
@@ -68,6 +68,21 @@ RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
 # صور افتراضية اختيارية (من settings.py فقط)
 DEFAULT_IMAGES = getattr(_settings, "DEFAULT_IMAGES", {}) if _settings else {}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# إشارات "إشادة ونجاح": تقييمات عالية، مديح النقاد، مبيعات وإيرادات كبيرة...
+# أي خبر فيها يمر في كل الأقسام (بشرط ما يكون في قوائم المنع)
+PRAISE_PATTERNS = [
+    r"\bacclaim", r"\bpraise", r"\braves?\b", r"rave review", r"universal acclaim",
+    r"\bmasterpiece", r"best[- ]reviewed", r"highest[- ]rated", r"top[- ]rated",
+    r"perfect score", r"\b10/10\b", r"overwhelmingly positive", r"very positive",
+    r"\bmetacritic", r"opencritic", r"rotten tomatoes", r"standing ovation",
+    r"\bbrilliant", r"\bstunning", r"\bexcellent", r"\bfantastic", r"\bsuperb", r"\btriumph",
+    r"must[- ](play|watch|read)", r"game of the year", r"\bgoty\b", r"fan[- ]favou?rite",
+    r"\bbeloved\b", r"smash hit", r"runaway hit", r"surprise hit", r"sleeper hit",
+    r"critics (love|praise|rave|call|hail)", r"fans (love|praise|rave|hail)", r"\bhailed\b",
+    r"million (copies|players|units|views)", r"\bbox office\b", r"\b#1\b",
+    r"tops? (the )?(charts?|box office|rankings?)", r"record[- ]breaking",
+]
 
 # ممنوع في الأنمي والمانجا: حياة شخصية للممثلين والفنانين، وفيات، فضائح، ومواضيع جانبية
 ANIME_BLOCK_TITLE = [
@@ -101,6 +116,7 @@ CATEGORIES = [
         "feeds": [
             "https://www.animenewsnetwork.com/all/rss.xml",
             "https://otakuusamagazine.com/feed/",
+            {"url": "https://animecorner.me/feed/", "loose": True, "max": 1},
         ],
         "keywords": ["manga", "manhwa", "manhua", "light novel", "webtoon"],
         # أخبار مهمة: إعلانات، اقتباس أنمي، نهاية مانجا، توقف، جوائز، مبيعات ضخمة
@@ -131,6 +147,7 @@ CATEGORIES = [
         "feeds": [
             "https://www.animenewsnetwork.com/all/rss.xml",
             "https://myanimelist.net/rss/news.xml",
+            {"url": "https://animecorner.me/feed/", "loose": True, "max": 1},
         ],
         "keywords": None,
         # لازم الخبر يتكلم عن أنمي فعلاً (يمنع أفلام الممثلين الحقيقيين وأخبار الألعاب)
@@ -174,6 +191,11 @@ CATEGORIES = [
                              r"next fest", r"solo dev", r"small studio", r"\bwishlist",
                              r"debut game", r"first game"]},
             {"url": "https://indiegamesplus.com/feed", "loose": True, "max": 1},
+            # مراجعات ألعاب: ياخذ بس اللي وصفها إيجابي (إشادة، تقييم عالي...)
+            {"url": "https://www.gamespot.com/feeds/reviews/", "loose": True, "max": 1,
+             "require_any": PRAISE_PATTERNS},
+            {"url": "https://www.eurogamer.net/feed/reviews", "loose": True, "max": 1,
+             "require_any": PRAISE_PATTERNS},
             # موقع مختلط (أفلام وكتب): يبقى بالفلتر الشديد
             "https://www.polygon.com/rss/index.xml",
         ],
@@ -237,6 +259,7 @@ CATEGORIES = [
         "feeds": [
             "https://www.slashfilm.com/feed/",
             "https://deadline.com/feed/",
+            "https://variety.com/v/film/feed/",
         ],
         "keywords": None,
         # لازم الخبر يتكلم عن فيلم
@@ -299,8 +322,11 @@ CATEGORIES = [
     },
 ]
 
+for _c in CATEGORIES:
+    _c.setdefault("praise_ok", True)
+
 SEEN_FILE = "seen.json"
-SCAN_ENTRIES = 20
+SCAN_ENTRIES = 30
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -755,7 +781,10 @@ def passes_filter(entry, cat, relaxed=False, opts=None):
         title_groups = cat.get("require_title_groups") or []
         block = cat.get("block_title") or []
 
-    if not loose:
+    # مسار الإشادة: خبر فيه تقييم عالي/مديح/نجاح كبير يمر حتى لو عنوانه ما فيه كلمة حدث
+    praise = (not relaxed) and cat.get("praise_ok") and any(re.search(pat, text) for pat in PRAISE_PATTERNS)
+
+    if not loose and not praise:
         for group in title_groups:
             if not any(re.search(pat, title) for pat in group):
                 return False
