@@ -1194,6 +1194,8 @@ async def send_entry(cat, channel, entry, relaxed=False):
         unmark_seen(entry)      # ما نجح الإرسال: نرجّع الخبر يtry في التشغيل الجاي
         raise
 
+    print(f"[{cat['key']}] posted: {title[:80]} | {link}")
+
     now_utc = discord.utils.utcnow()
     last_post_at[cat["key"]] = now_utc
     if relaxed:
@@ -1384,7 +1386,7 @@ async def preload_seen_from_channels():
                     if marked and await handle_blocked_message(msg, cat):
                         to_delete.append(msg)
             history_ok[cat["key"]] = True
-            print(f"  history in {cat['name']}: {hist_count} messages from the bot, {added} new links")
+            print(f"  history in {cat['name']}: {hist_count} bot messages, {added} new links to remember")
         except discord.Forbidden:
             print("Cannot read history in", cat["name"],
                   "- give the bot 'Read Message History' for extra duplicate protection.")
