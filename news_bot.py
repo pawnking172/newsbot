@@ -1462,12 +1462,26 @@ async def news_loop():
 
 
 _ready_done = False
+TEST_MESSAGE = os.environ.get("TEST_MESSAGE", "").strip()
 
 
 @bot.event
 async def on_ready():
     global _ready_done
     print("Bot started:", bot.user, "| version:", BOT_VERSION)
+
+    # وضع الاختبار: رسالة وحدة في قناة الألعاب (ما يرسل أخبار)
+    if TEST_MESSAGE:
+        cid = _cfg_int("TEST_CHANNEL_ID") or GAMES_CHANNEL_ID
+        try:
+            channel = await bot.fetch_channel(cid)
+            await channel.send(TEST_MESSAGE)
+            print("TEST: sent to channel", cid, "->", TEST_MESSAGE)
+        except Exception as e:
+            print("TEST failed:", e)
+        await bot.close()
+        return
+
     if RUN_ONCE:
         if _ready_done:
             return
