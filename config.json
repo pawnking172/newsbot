@@ -28,8 +28,10 @@
   "block_reactions": ["❌", "👎", "🚫"],
   "delete_blocked": true,
 
-  "max_total_per_run": 8,
-  "max_per_category_per_run": 2,
+  "max_total_per_run": 15,
+  "max_per_category_per_run": 3,
+  "side_max_per_hour": 2,
+  "side_min_gap_minutes": 60,
 
   "llm_check": false,
   "llm_model": "claude-sonnet-5"
