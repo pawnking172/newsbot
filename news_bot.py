@@ -246,6 +246,7 @@ ESSENTIAL_ANIME = [
     r"\banime\b.*\b(gets|reveals|announces|premieres|debuts|returns|ends|delayed|confirmed)\b",
     r"\bgets?\b.*\b(anime|season|film|movie|ova)\b", r"\bpremiere", r"\btrailer", r"\bteaser", r"\bpv\b",
     r"\bvisual\b", r"release date", r"\bto (premiere|debut|air|launch|return|stream|release)\b", r"\bdelay",
+    r"\bpart \d+\b", r"\bcour \d+\b", r"\bseason \d+\b", r"\bout now\b", r"\bnow airing\b",
     r"\bfilm\b", r"\bova\b", r"\bona\b", r"\breturns?\b", r"\bfinale\b", r"\bnow streaming\b",
     r"\bgreenlit\b", r"\bconfirm",
 ]
@@ -478,10 +479,15 @@ print("Noise groups:", ", ".join("%s=%s" % (k, "on" if v else "off") for k, v in
 
 # قواعد إضافية لكل قسم (مثال: {"movies": ["\\bbox office\\b"]})
 CATEGORY_EXTRA_ESSENTIAL = CONFIG.get("category_essential") or {}
-MAX_TOTAL_PER_RUN = _cfg_int("MAX_TOTAL_PER_RUN", int(CONFIG.get("max_total_per_run", 8) or 8))
-# أقصى عدد أخبار لكل قناة في التشغيل الواحد (يعني القناة ما تاكل الحصة كلها)
+MAX_TOTAL_PER_RUN = _cfg_int("MAX_TOTAL_PER_RUN", int(CONFIG.get("max_total_per_run", 15) or 15))
+# أقصى عدد أخبار (رئيسية) لكل قناة في التشغيل الواحد
 MAX_PER_CATEGORY_PER_RUN = _cfg_int(
-    "MAX_PER_CATEGORY_PER_RUN", int(CONFIG.get("max_per_category_per_run", 2) or 2)
+    "MAX_PER_CATEGORY_PER_RUN", int(CONFIG.get("max_per_category_per_run", 3) or 3)
+)
+# قواعد الخبر الجانبي: بال小时 مو بالتشغيل
+SIDE_MAX_PER_HOUR = _cfg_int("SIDE_MAX_PER_HOUR", int(CONFIG.get("side_max_per_hour", 2) or 2))
+SIDE_MIN_GAP_MINUTES = _cfg_int(
+    "SIDE_MIN_GAP_MINUTES", int(CONFIG.get("side_min_gap_minutes", 60) or 60)
 )
 
 # تشغيل تجريبي: يطبع اللي كان بينزل بدون ما يرسل شي
@@ -1283,12 +1289,23 @@ async def post_category(cat):
     if quiet is not None and quiet * 60 < QUIET_MINUTES:
         return
 
-    day_ago = discord.utils.utcnow() - datetime.timedelta(hours=24)
+    now = discord.utils.utcnow()
+    hour_ago = now - datetime.timedelta(hours=1)
+    day_ago = now - datetime.timedelta(hours=24)
+    side_recent = [t for t in relaxed_recent.get(cat["key"], []) if t > hour_ago]
     done_today = len([t for t in relaxed_recent.get(cat["key"], []) if t > day_ago])
-    allowed = min(RELAXED_MAX, RELAXED_PER_DAY - done_today,
+
+    # ما ننزل خبر جانبي إلا بعد ساعة كاملة من آخر خبر جانبي في نفس القناة
+    if side_recent:
+        gap = (now - max(side_recent)).total_seconds() / 60
+        if gap < SIDE_MIN_GAP_MINUTES:
+            print(f"[{cat['key']}] side news: only {gap:.0f} min since the last one "
+                  f"- waiting for {SIDE_MIN_GAP_MINUTES} min")
+            return
+
+    allowed = min(RELAXED_MAX, SIDE_MAX_PER_HOUR - len(side_recent), RELAXED_PER_DAY - done_today,
                   RELAXED_TOTAL_PER_RUN - relaxed_run_total,
-                  min(MAX_PER_CATEGORY, MAX_PER_CATEGORY_PER_RUN) - essential_posted)
-    allowed = min(allowed, MAX_TOTAL_PER_RUN - posted_total)
+                  MAX_TOTAL_PER_RUN - posted_total)
     if allowed <= 0:
         print(f"[{cat['key']}] quiet, but the side-news limit is reached "
               f"(today {done_today}/{RELAXED_PER_DAY}, this run {relaxed_run_total}/{RELAXED_TOTAL_PER_RUN})")
