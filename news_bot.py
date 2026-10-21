@@ -627,43 +627,92 @@ def trim_to_sentence(text, limit):
     return cut.rstrip() + "…"
 
 
+GOOGLE_COOLDOWN_SECONDS = 20 * 60      # لو قوقل حجبنا، نتجاهله فترة
+_google_blocked_until = 0.0
+
+
+def _split_text(text, size=450):
+    """يقسم النص لقطع صغيرة (MyMemory محدود بحجم الطلب الواحد)."""
+    parts, cur = [], ""
+    for para in (text or "").split("\n\n"):
+        para = para.strip()
+        while len(para) > size:
+            cut = para.rfind(" ", 0, size)
+            cut = cut if cut > 0 else size
+            parts.append(para[:cut].strip())
+            para = para[cut:].strip()
+        if para:
+            if cur and len(cur) + len(para) + 2 > size:
+                parts.append(cur)
+                cur = para
+            else:
+                cur = (cur + "\n\n" + para) if cur else para
+    if cur:
+        parts.append(cur)
+    return [p for p in parts if p]
+
+
+def _translate_google(text):
+    """قوقل: لو حجبنا (rate limit) نوقف تجربته لمدة، بدل ما نعيد 3 مرات كل خبر."""
+    global _google_blocked_until
+    if time.monotonic() < _google_blocked_until:
+        raise RuntimeError("google is cooling down")
+    out = (GoogleTranslator(source="auto", target="ar").translate(text) or "").strip()
+    if not out:
+        raise RuntimeError("empty answer")
+    return out
+
+
+def _translate_mymemory(text):
+    """MyMemory: نترجم النص قطعة قطعة عشان ما نضيعه لما يكون طويل."""
+    out = []
+    for part in _split_text(text, 450):
+        r = (MyMemoryTranslator(source="en-US", target="ar-SA").translate(part) or "").strip()
+        if not r or "MYMEMORY WARNING" in r.upper():
+            raise RuntimeError("MyMemory refused the request")
+        out.append(r)
+        time.sleep(0.5)
+    return "\n\n".join(out)
+
+
 def translate_pair(title, body):
-    """يترجم العنوان والنص بطلب واحد. إذا فشل كل شيء يرفع TranslationUnavailable
-    (ما نرسل خبر بالإنجليزي أبداً)."""
+    """يترجم العنوان والنص. يجرب قوقل ثم MyMemory (مقسّم لقطع).
+    إذا فشل كل شيء يرفع TranslationUnavailable (ما نرسل خبر بالإنجليزي أبداً)."""
+    global _google_blocked_until
     title = (title or "").strip()
     body = (body or "").strip()
-    combined = f"{title}\n\n{body}" if body else title
+    if not title:
+        raise TranslationUnavailable()
 
-    # 1) قوقل (طلب واحد للعنوان والنص)
-    for attempt in range(3):
-        try:
-            google = GoogleTranslator(source="auto", target="ar")
-            out = (google.translate(combined[:4500]) or "").strip()
-            if out:
-                parts = out.split("\n", 1)
-                t_ar = parts[0].strip()
-                b_ar = parts[1].strip() if len(parts) > 1 else ""
-                if body and not b_ar:   # لو ضاع الفاصل نترجم العنوان والنص كل واحد لحاله
-                    t_ar = (google.translate(title[:500]) or "").strip()
-                    b_ar = (google.translate(body[:4500]) or "").strip()
-                if t_ar and (b_ar or not body):
-                    time.sleep(1.5)     # تأخير بسيط عشان ما يحظرنا قوقل
-                    return t_ar, b_ar
-        except Exception as e:
-            print("Google translate failed, attempt", attempt + 1, ":", e)
-            time.sleep(10 * (attempt + 1))
-
-    # 2) مترجم احتياطي (يترجم نص أقصر)
+    # 1) قوقل: طلب واحد للعنوان والنص
     try:
-        mm = MyMemoryTranslator(source="en-US", target="ar-SA")
-        t_ar = (mm.translate(title[:450]) or "").strip()
-        b_ar = (mm.translate(trim_to_sentence(body, 450)) or "").strip() if body else ""
-        if "MYMEMORY WARNING" in (t_ar + b_ar).upper():
-            raise RuntimeError("MyMemory daily quota reached")
+        combined = (title + "\n\n" + body)[:4500] if body else title
+        out = _translate_google(combined)
+        parts = out.split("\n", 1)
+        t_ar = parts[0].strip()
+        b_ar = parts[1].strip() if len(parts) > 1 else ""
+        if body and not b_ar:      # لو ضاع الفاصل نترجم كل واحد لحاله
+            t_ar = _translate_google(title[:500])
+            b_ar = _translate_google(body[:4500])
+        if t_ar and (b_ar or not body):
+            time.sleep(1.5)        # تأخير بسيط عشان ما يحظرنا قوقل
+            return t_ar, b_ar
+    except Exception as e:
+        msg = str(e).lower()
+        if "too many requests" in msg or "429" in msg or "blocked" in msg:
+            _google_blocked_until = time.monotonic() + GOOGLE_COOLDOWN_SECONDS
+            print("Google translate is rate-limited - skipping it for",
+                  GOOGLE_COOLDOWN_SECONDS // 60, "minutes")
+        print("Google translate failed:", str(e)[:120])
+
+    # 2) مترجم احتياطي (MyMemory)
+    try:
+        t_ar = _translate_mymemory(title)
+        b_ar = _translate_mymemory(body) if body else ""
         if t_ar and (b_ar or not body):
             return t_ar, b_ar
     except Exception as e:
-        print("Backup translator failed:", e)
+        print("Backup translator failed:", str(e)[:120])
 
     raise TranslationUnavailable()
 
@@ -1309,12 +1358,14 @@ async def preload_seen_from_channels():
         channel = bot.get_channel(cid)
         if channel is None:
             continue
+        hist_count = 0
         try:
             async for msg in channel.history(limit=100):
                 if msg.author.id != bot.user.id:
                     continue
                 if cat["key"] not in last_post_at:    # أول رسالة نمرّ عليها هي الأحدث
                     last_post_at[cat["key"]] = msg.created_at
+                hist_count += 1
                 for emb in msg.embeds:
                     footer = getattr(getattr(emb, "footer", None), "text", None) or ""
                     if RELAXED_TAG in footer:
@@ -1333,6 +1384,7 @@ async def preload_seen_from_channels():
                     if marked and await handle_blocked_message(msg, cat):
                         to_delete.append(msg)
             history_ok[cat["key"]] = True
+            print(f"  history in {cat['name']}: {hist_count} messages from the bot, {added} new links")
         except discord.Forbidden:
             print("Cannot read history in", cat["name"],
                   "- give the bot 'Read Message History' for extra duplicate protection.")
