@@ -1,0 +1,36 @@
+{
+  "_readme": [
+    "إعدادات بوت الأخبار. تقدر تعدّل هالملف من GitHub بدون ما تلمس الكود.",
+    "الفلاتر: blocked_words تحجب أي خبر فيه الكلمة، blocked_titles تحجب عنوان بالضبط،",
+    "blocked_domains تحجب موقع كامل. noise_groups:Rules تفعّل/تعطّل مجموعات الأخبار التافهة.",
+    "noise_patterns: قواعد إضافية تكتبها بنفسك (regex إنجليزي).",
+    "category_essential: قواعد إضافية لكل قسم (مثال: {\"movies\": [\"\\\\bmy keyword\\\\b\"]}).",
+    "block_reactions: أي تفاعل من هذي على خبر = البوت يحذفه ويعتبره محظور للأبد.",
+    "delete_blocked: true يعني البوت يحذف الخبر اللي علّمته بالتفاعل."
+  ],
+
+  "blocked_words": [],
+  "blocked_titles": [],
+  "blocked_domains": [],
+
+  "noise_groups": {
+    "rumors": true,
+    "opinions": true,
+    "questions": true,
+    "promos": true,
+    "spoilers": true,
+    "personal": true
+  },
+  "noise_patterns": [],
+
+  "category_essential": {},
+
+  "block_reactions": ["❌", "👎", "🚫"],
+  "delete_blocked": true,
+
+  "max_total_per_run": 8,
+  "max_per_category_per_run": 2,
+
+  "llm_check": false,
+  "llm_model": "claude-sonnet-5"
+}

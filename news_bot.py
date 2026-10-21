@@ -93,8 +93,8 @@ BLOCK_ALL_TITLE = [
     r"\barrest(ed|s)?\b", r"\bscandal\b", r"\bhospitali[sz]ed\b", r"\bcancer\b", r"\brehab\b",
     r"\bfeud\b", r"\blawsuit\b", r"\bsues?\b", r"\bnet worth\b", r"\bbirthday\b",
     # ممثلين (ممنوع نهائياً)
-    r"\bactors?\b", r"\bactress(es)?\b", r"\bvoice (actor|actress|cast)\b", r"\bseiyuu\b",
-    r"\bcast(s|ing)?\b", r"\bstarring\b", r"\bco-?stars?\b", r"\bstars? (in|as|of)\b",
+    r"\bactors?\b", r"\bactress(es)?\b", r"\bvoice (actor|actress)\b", r"\bseiyuu\b",
+    r"\bstarring\b", r"\bco-?stars?\b", r"\bstars? (in|as|of)\b",
     r"\bjoins (the )?(cast|film|movie|series|show)\b", r"\bportray", r"\b(his|her|their|the) role\b", r"\bbiopic\b",
     # مقابلات وأحاديث شخصية
     r"\binterview\b", r"\bon (playing|portraying|becoming|being|how|why)\b",
@@ -114,6 +114,45 @@ BLOCK_ALL_TEXT = [   # في الملخص: عبارات شخصية صريحة ف�
     r"\bis pregnant\b", r"\bgave birth\b", r"\bgives birth\b", r"\bpregnancy\b",
     r"\btheir (first|second) child\b", r"\b(her|his) marriage\b", r"\bgot married\b",
     r"\bannounced (her|his|their) (marriage|engagement)\b",
+]
+
+# ---------- 4) أخبار تافهة/مش مهمة (على العنوان) ----------
+# كل مجموعة تقدر تعطّلها من config.json ("noise_groups": {"rumors": false})
+NOISE_GROUPS = {
+    "rumors": [      # إشاعات وتكهنات
+        r"\brumou?rs?\b", r"\bleak(s|ed|ing)?\b", r"\binsider(s)?\b", r"\bspeculation\b",
+        r"\bwe (think|believe|heard|guess)\b", r"\bmight (be|come)\b", r"\bcould (be|come)\b",
+        r"\breportedly\b", r"\bsupposedly\b", r"\ballegedly\b", r"\bif true\b",
+    ],
+    "opinions": [    # رأي وتحليل
+        r"\bopinion\b", r"\beditorial\b", r"\bhot take\b", r"\bwe think\b", r"\bcolumn\b",
+        r"\blook(s|ing)? back\b", r"\bthrowback\b", r"\bforeshadow", r"\bfan theor",
+        r"\bdeep dive\b", r"\bexplained\b", r"\bbreakdown\b",
+    ],
+    "questions": [   # أسئلة وقوائم
+        r"^(should|will|could|would|can|is|are|did|does|do|why|how|what|who|when|where)\b.*\?$",
+        r"\bhow dare\b", r"\byou (need|should|must) to (play|watch|read|buy)\b", r"\bwe ranked\b",
+        r"\bmy (favorites?|top \d+)\b", r"\b\d+ (things|reasons|ways)\b",
+    ],
+    "promos": [      # محتوى ترويجي
+        r"\bgiveaway\b", r"\bgive away\b", r"\bcontest\b", r"\bsponsored\b", r"\badvertorial\b",
+        r"\bfree to play\b", r"\bsteam sale\b", r"\bbundle deal\b", r"\bearly bird\b",
+    ],
+    "spoilers": [    # حرق
+        r"\bspoiler", r"\bplot twist\b", r"\bending explained\b", r"\bfinale explained\b",
+    ],
+    "personal": [    # مقالات شخصية ومعلومات ما تهم
+        r"^I\b", r"\bI (still )?(haven't|have not|didn't|don't|couldn't|wouldn't|can't)\b",
+        r"\bI 've (been|had|played|bought|watched)\b", r"\b\d+ years? after\b",
+        r"\bex-(developer|designer|producer|artist|editor)\b",
+        r"\bformer (developer|designer|producer|artist)\b",
+        r"\bin (depth|detail)\b", r"\bthings to know\b", r"\bthings we learned\b",
+        r"\bquick facts\b", r"\bquiz\b", r"\btrivia\b",
+    ],
+}
+NOISE_TEXT = [
+    r"\bclick here\b", r"\bsubscribe\b", r"\bsign up\b", r"\bnewsletter\b",
+    r"\bpatreon\b", r"\baffiliate\b", r"\bdiscount code\b",
 ]
 
 # عنوان فيلم يبدأ باسم شخص ثم فعل أو 's  (مثل: Tom Cruise Confirms) = خبر ممثل = ممنوع
@@ -221,6 +260,10 @@ ESSENTIAL_MOVIES = [
     r"\btrailer", r"\bteaser", r"release date", r"sets? release", r"\bannounc", r"\bgreenlit",
     r"\bsequel", r"\bprequel", r"\breboot", r"\bremake", r"first look", r"\bposter", r"in theaters",
     r"\bpremieres?\b", r"\bcoming to\b", r"\bdated\b", r"\breleases?\b", r"now streaming", r"\bunveil",
+    r"\bnow (on|streaming|playing|available)\b", r"\bin (cinemas|theaters|theatres)\b",
+    r"\bpicked? up\b", r"\bin production\b", r"\brenewed\b", r"\bfootage\b",
+    r"\bpost-?credits?\b", r"\bstreaming\b", r"\bnow on\b",
+    r"\bnew (film|movie|series)\b",
 ]
 
 # ---------- الأقسام ----------
@@ -265,6 +308,7 @@ CATEGORIES = [
             {"url": "https://www.gamespot.com/feeds/reviews/", "trusted": True, "require_any": PRAISE_PATTERNS},
             {"url": "https://www.eurogamer.net/feed/reviews", "trusted": True, "require_any": PRAISE_PATTERNS},
             "https://www.polygon.com/rss/index.xml",
+            "https://www.pcgamer.com/rss/",
         ],
         "topic": [r"\bgames?\b", r"\bgaming\b", r"playstation", r"\bps[45]\b", r"xbox", r"nintendo",
                   r"\bswitch\b", r"\bsteam\b", r"\bdlc\b", r"\bconsoles?\b"],
@@ -276,16 +320,20 @@ CATEGORIES = [
     {
         "name": "أخبار الأفلام", "key": "movies", "channel": MOVIES_CHANNEL_ID, "color": 0xE74C3C,
         "feeds": [
-            "https://www.slashfilm.com/feed/",
-            "https://deadline.com/feed/",
-            "https://variety.com/v/film/feed/",
+            # مصادر الأفلام: كلها عن أفلام، فما نطلب كلمة "movie" في العنوان
+            {"url": "https://www.theplaylist.net/feed/", "trusted": True},
+            {"url": "https://www.slashfilm.com/feed/", "trusted": True},
+            {"url": "https://deadline.com/feed/", "trusted": True},
+            {"url": "https://variety.com/v/film/feed/", "trusted": True},
+            {"url": "https://collider.com/feed/", "trusted": True},
         ],
         "topic": [r"\bfilms?\b", r"\bmovies?\b"],
         "essential": ESSENTIAL_MOVIES,
         "block_person_first": True,
         "block": [r"\bvideo games?\b", r"\banime\b", r"\bmanga\b", r"\bseason \d", r"\bepisodes?\b",
                   r"\bshowrunner", r"\bsitcom", r"tv series", r"tv show", r"series finale", r"\bconcert",
-                  r"\bsong\b", r"\balbum", r"\bpredictions?\b", r"\bcontenders\b"],
+                  r"\bsong\b", r"\balbum", r"\bpredictions?\b", r"\bcontenders\b",
+                  r"\bcast(s|ing)?\b", r"\bvoice cast\b"],
     },
     {
         "name": "أخبار الموسيقى", "key": "music", "channel": MUSIC_CHANNEL_ID, "color": 0x1ABC9C,
@@ -355,8 +403,99 @@ def title_tokens(nt):
     return {w for w in nt.split() if len(w) >= 3 and w not in GENERIC_WORDS}
 
 
+# =====================================================================
+#   إعدادات المستخدم (config.json) + قائمة الحظر (blocklist.json)
+#   تقدر تعدّلهم من GitHub بدون ما تلمس الكود
+# =====================================================================
+CONFIG_FILE = "config.json"
+BLOCKLIST_FILE = "blocklist.json"
+
+DEFAULT_CONFIG = {
+    "blocked_domains": [],       # نطاقات ما تنزل منها أي خبر (مثال: "example.com")
+    "blocked_words": [],         # كلمات تحجب الخبر (مثال: "gacha")
+    "blocked_titles": [],        # عناوين كاملة تتحجب
+    "block_reactions": ["❌", "👎", "🚫"],   # أي تفاعل يعلّم الخبر كـ"غير مرغوب"
+    "delete_blocked": True,      # نحذف الخبر من القناة لما يعلّمه تفاعل
+    "max_total_per_run": 8,      # أقصى عدد أخبار في تشغيل واحد (كل القنوات)
+    "llm_check": False,          # نستعمل Claude للحكم على الأهمية (يحتاج ANTHROPIC_API_KEY)
+    "llm_model": "claude-sonnet-5",
+    "noise_patterns": [],        # قواعد إضافية تكتبها بنفسك (regex)
+}
+
+
+def load_json_file(path, default):
+    """يقرأ ملف JSON من مجلد البوت (وإن ما موجود يرجّع الافتراضي)."""
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print("Could not read", path, "- using defaults:", e)
+        return default
+
+
+def save_json_file(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+CONFIG = dict(DEFAULT_CONFIG)
+_cfg_file = load_json_file(CONFIG_FILE, None)
+if isinstance(_cfg_file, dict):
+    CONFIG.update(_cfg_file)
+
+BLOCKLIST = load_json_file(BLOCKLIST_FILE, None) or {}
+BLOCKLIST.setdefault("links", [])
+BLOCKLIST.setdefault("titles", [])
+BLOCKLIST.setdefault("words", [])
+BLOCKLIST.setdefault("history", [])
+
+BLOCK_TITLES = {norm_title(t) for t in BLOCKLIST["titles"] if t}
+BLOCK_WORDS = [str(w).strip().lower() for w in BLOCKLIST["words"] if str(w).strip()]
+BLOCK_LINKS = {normalize_url(l) for l in BLOCKLIST["links"] if l}
+
+CFG_BLOCKED_WORDS = [str(w).strip().lower() for w in CONFIG.get("blocked_words", []) if str(w).strip()]
+CFG_BLOCKED_TITLES = {norm_title(str(t)) for t in CONFIG.get("blocked_titles", []) if str(t).strip()}
+CFG_BLOCKED_DOMAINS = [
+    str(d).strip().lower().lstrip(".") for d in CONFIG.get("blocked_domains", []) if str(d).strip()
+]
+BLOCK_REACTIONS = [str(r) for r in CONFIG.get("block_reactions", []) if str(r).strip()]
+DELETE_BLOCKED = bool(CONFIG.get("delete_blocked", True))
+NOISE_EXTRA = [str(p) for p in CONFIG.get("noise_patterns", []) if str(p).strip()]
+
+# مجموعات القواعد التافهة: تقدر تعطّل أي مجموعة من config.json
+NOISE_ENABLED = {k: True for k in NOISE_GROUPS}
+for _group, _on in (CONFIG.get("noise_groups") or {}).items():
+    if _group in NOISE_ENABLED:
+        NOISE_ENABLED[_group] = bool(_on)
+NOISE_TITLE = [
+    p for group, pats in NOISE_GROUPS.items() if NOISE_ENABLED.get(group, True) for p in pats
+]
+print("Noise groups:", ", ".join("%s=%s" % (k, "on" if v else "off") for k, v in NOISE_ENABLED.items()))
+
+# قواعد إضافية لكل قسم (مثال: {"movies": ["\\bbox office\\b"]})
+CATEGORY_EXTRA_ESSENTIAL = CONFIG.get("category_essential") or {}
+MAX_TOTAL_PER_RUN = _cfg_int("MAX_TOTAL_PER_RUN", int(CONFIG.get("max_total_per_run", 8) or 8))
+# أقصى عدد أخبار لكل قناة في التشغيل الواحد (يعني القناة ما تاكل الحصة كلها)
+MAX_PER_CATEGORY_PER_RUN = _cfg_int(
+    "MAX_PER_CATEGORY_PER_RUN", int(CONFIG.get("max_per_category_per_run", 2) or 2)
+)
+
+# تشغيل تجريبي: يطبع اللي كان بينزل بدون ما يرسل شي
+DRY_RUN = os.environ.get("DRY_RUN") == "1" or bool(CONFIG.get("dry_run"))
+
+# فحص الأهمية بالذكاء الاصطناعي (اختياري)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or ""
+LLM_CHECK = os.environ.get("LLM_CHECK") == "1" or bool(CONFIG.get("llm_check"))
+LLM_MODEL = str(os.environ.get("LLM_MODEL") or CONFIG.get("llm_model") or "claude-sonnet-5")
+ANTHROPIC_API = "https://api.anthropic.com/v1/messages"
+
+
 def load_seen():
-    links, titles = {}, []
+    links, titles, rejected = {}, [], []
     if os.path.exists(SEEN_FILE):
         try:
             with open(SEEN_FILE, "r", encoding="utf-8") as f:
@@ -366,22 +505,28 @@ def load_seen():
             else:
                 raw_links = data.get("links", [])
                 raw_titles = data.get("titles", [])
+                raw_rejected = data.get("rejected", [])
             for l in raw_links:
                 links[normalize_url(l)] = None
             titles = list(raw_titles)
+            rejected = list(raw_rejected)
         except Exception as e:
             print("Could not read seen.json, starting fresh:", e)
-    return links, titles
+    return links, titles, rejected
 
 
 def save_seen():
     tmp = SEEN_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"links": list(seen_links), "titles": seen_titles}, f)
+        json.dump(
+            {"links": list(seen_links), "titles": seen_titles, "rejected": seen_rejected},
+            f,
+            ensure_ascii=False,
+        )
     os.replace(tmp, SEEN_FILE)
 
 
-seen_links, seen_titles = load_seen()
+seen_links, seen_titles, seen_rejected = load_seen()
 
 
 def similar_title(nt):
@@ -402,8 +547,10 @@ def similar_title(nt):
 
 
 def is_duplicate(entry):
-    """هل هذا الخبر (أو خبر مشابه جداً له) انرسل من قبل؟"""
+    """هل هذا الخبر (أو خبر مشابه جداً له) انرسل أو اترفض من قبل؟"""
     if normalize_url(entry.get("link")) in seen_links:
+        return True
+    if normalize_url(entry.get("link")) in seen_rejected:
         return True
     eid = entry.get("id")
     if eid and normalize_url(eid) in seen_links:
@@ -427,6 +574,28 @@ def mark_seen(entry):
     save_seen()
 
 
+def unmark_seen(entry):
+    """لو فشل الإرسال نرجّع الخبر للقائمة عشان ينزل في التشغيل الجاي."""
+    for key in (entry.get("link"), entry.get("id")):
+        if key:
+            seen_links.pop(normalize_url(key), None)
+    nt = norm_title(entry.get("title", ""))
+    if nt and nt in seen_titles:
+        seen_titles.remove(nt)
+    save_seen()
+
+
+def mark_rejected(entry):
+    """خبر مرفوض (مش مهم): نسجّله عشان ما نتحقق منه مرة ثانية ولا ينزل."""
+    link = normalize_url(entry.get("link"))
+    if not link:
+        return
+    if link not in seen_rejected:
+        seen_rejected.append(link)
+        del seen_rejected[:-MAX_SEEN_LINKS]
+        save_seen()
+
+
 def clean_html(text):
     return re.sub(r"<[^>]+>", "", text or "").strip()
 
@@ -441,6 +610,9 @@ relaxed_run_total = 0  # كم "مختارات" نزلت في هذا التشغي
 history_ok = {}        # هل قدرنا نقرأ سجل القناة (عشان نعرف آخر وقت)
 _translation_pause_until = 0.0   # إذا فشلت الترجمة نوقف الإرسال شوي بدل ما نرسل إنجليزي
 TRANSLATION_PAUSE_SECONDS = 15 * 60
+
+posted_total = 0        # كم خبر نزل في هذا التشغيل (كل الأقسام)
+run_stats = {"posted": 0, "essential": 0, "side": 0, "rejected": 0, "duplicates": 0}
 
 
 def trim_to_sentence(text, limit):
@@ -494,6 +666,64 @@ def translate_pair(title, body):
         print("Backup translator failed:", e)
 
     raise TranslationUnavailable()
+
+
+LLM_PROMPT = """أنت محرّر أخبار لقنوات ديسكورد عربية (أنمي، مانجا، ألعاب، أفلام).
+
+راجع الخبر التالي، وأجب سؤالين:
+1) هل هو خبر مهم يستاهل يعرض على متابعين هذه الأعمال؟ (مو تقييم، مو إعلان، مو إشاعة، مو رأي شخصي، مو خبر مكرر)
+2) لخّصه بالعربي الفصحى المبسّط في 3-5 جمل، وعنوان قصير وواضح.
+
+القسم: {category}
+العنوان الأصلي: {title}
+
+النص:
+{body}
+
+رد بـ JSON فقط (بدون أي كلام ثاني):
+{{"keep": true أو false, "reason": "سبب قصير", "title_ar": "العنوان بالعربي", "body_ar": "الملخص بالعربي"}}"""
+
+
+def llm_judge(title, body, category):
+    """يستشير Claude: هل الخبر مهم؟ ويعيده مترجماً بالعربي.
+    يرجع None إذا فشل الاتصال (فنكمل بالقواعد العادية)."""
+    if not ANTHROPIC_API_KEY:
+        return None
+    prompt = LLM_PROMPT.format(
+        category=category,
+        title=title,
+        body=trim_to_sentence(body, 1500) or "(ما فيه نص)",
+    )
+    try:
+        r = requests.post(
+            ANTHROPIC_API,
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": LLM_MODEL,
+                "max_tokens": 1500,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=90,
+        )
+        if r.status_code != 200:
+            print("Claude check failed:", r.status_code, r.text[:200])
+            return None
+        data = r.json()
+        text = "".join(b.get("text", "") for b in data.get("content", []))
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            print("Claude check: could not read the JSON answer")
+            return None
+        out = json.loads(m.group(0))
+        out["keep"] = bool(out.get("keep"))
+        return out
+    except Exception as e:
+        print("Claude check error:", e)
+        return None
 
 
 def feed_image(entry):
@@ -720,8 +950,48 @@ def find_anime_image(text, kind):
     return None
 
 
-def classify(entry, cat, spec=None):
-    """يصنّف الخبر: "essential" (أساسي) أو "side" (جانبي) أو None (ممنوع / ما يناسب القسم)."""
+def _why(why, msg):
+    """يكتب سبب الرفض مرة واحدة (للتسجيل)."""
+    if why is not None and not why:
+        why.append(msg)
+
+
+def blocked_by_user(entry, raw_title, text):
+    """هل الخبر محظور حسب إعدادات المستخدم/قائمة الحظر أو لأنه تافه؟
+    يرجع سبب الرفض أو None إذا الخبر مسموح."""
+    link = normalize_url(entry.get("link"))
+    if link and link in BLOCK_LINKS:
+        return "محظور (قائمة الحظر)"
+    host = ""
+    if link and link.startswith("http"):
+        host = urlsplit(link).netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+    for d in CFG_BLOCKED_DOMAINS:
+        if host and (host == d or host.endswith("." + d)):
+            return "محظور (نطاق محجوب)"
+    nt = norm_title(raw_title)
+    if nt and (nt in CFG_BLOCKED_TITLES or nt in BLOCK_TITLES):
+        return "محظور (عنوان محجوب)"
+    low = raw_title.lower()
+    for w in CFG_BLOCKED_WORDS + BLOCK_WORDS:
+        if w and w in low:
+            return "محظور (كلمة: %s)" % w
+    for pat in NOISE_TITLE + NOISE_EXTRA:
+        try:
+            if re.search(pat, low):
+                return "غير مهم (قاعدة تافهة)"
+        except re.error:
+            print("Invalid noise pattern, skipped:", pat)
+    for pat in NOISE_TEXT:
+        if re.search(pat, text):
+            return "غير مهم (نص ترويجي)"
+    return None
+
+
+def classify(entry, cat, spec=None, why=None):
+    """يصنّف الخبر: "essential" (أساسي) أو "side" (جانبي) أو None (ممنوع / ما يناسب القسم).
+    why = قائمة نكتب فيها سبب الرفض عشان نعرف ليش ما نزل الخبر."""
     spec = spec or {}
     raw_title = entry.get("title", "").strip()
     title = raw_title.lower()
@@ -731,27 +1001,42 @@ def classify(entry, cat, spec=None):
     # 3) ممنوع نهائياً: ممثلين، حياة شخصية، مقابلات، أخبار تافهة
     for pat in BLOCK_ALL_TITLE + (cat.get("block") or []):
         if re.search(pat, title):
+            _why(why, "ممنوع (قائمةblk)")
             return None
     for pat in BLOCK_ALL_TEXT:
         if re.search(pat, text):
+            _why(why, "ممنوع (نص شخصي)")
             return None
     if cat.get("block_person_first"):
         mp = PERSON_FIRST.match(raw_title)
         if mp:
             name = mp.group(1).lower()
             if name.split()[0] not in STUDIO_FIRST and not FAMOUS_RE.search(name):
+                _why(why, "ممنوع (خبر ممثل)")
                 return None
+
+    # 4) حظر المستخدم + الأخبار التافهة/غير المهمة
+    reason = blocked_by_user(entry, raw_title, text)
+    if reason:
+        _why(why, reason)
+        return None
 
     # لازم يكون عن موضوع القسم (إلا المصادر اللي كلها مواضيع القسم)
     topic = cat.get("topic")
     if topic and not spec.get("trusted") and not any(re.search(p, text) for p in topic):
+        _why(why, "ما يناسب القسم")
         return None
     require_any = spec.get("require_any")
     if require_any and not any(re.search(p, text) for p in require_any):
+        _why(why, "ما يحقق شرط المصدر")
         return None
 
     # 1) أساسي
-    if any(re.search(p, title) for p in cat.get("essential") or []):
+    essential = list(cat.get("essential") or [])
+    extra = CATEGORY_EXTRA_ESSENTIAL.get(cat.get("key"))
+    if extra:
+        essential += [str(p) for p in extra]
+    if any(re.search(p, title) for p in essential):
         return "essential"
 
     # 2) جانبي: تقييم/أفضل/مبيعات، لعمل مشهور فقط
@@ -763,6 +1048,7 @@ def classify(entry, cat, spec=None):
         )
         if famous:
             return "side"
+    _why(why, "ما هو خبر أساسي")
     return None
 
 
@@ -777,7 +1063,20 @@ def hours_since_last_post(cat):
 async def send_entry(cat, channel, entry, relaxed=False):
     """يجهّز الخبر (صورة + ترجمة) ويرسله. يرفع TranslationUnavailable إذا الترجمة معطلة."""
     link = entry.get("link")
+    raw_title = (entry.get("title") or "").strip()
     summary = clean_html(entry.get("summary", ""))
+
+    # 0) فحص الأهمية بالذكاء الاصطناعي (اختياري): يمنع الأخبار التافهة قبل أي شغل ثقيل
+    verdict = None
+    if LLM_CHECK and ANTHROPIC_API_KEY:
+        verdict = await asyncio.to_thread(llm_judge, raw_title, summary, cat["name"])
+        if verdict is None:
+            print("[llm] the check failed - using the normal filters")
+        elif not verdict.get("keep", True):
+            print("[llm] skipped (not important):", raw_title[:90], "|", verdict.get("reason", ""))
+            mark_rejected(entry)
+            return False
+
     image = feed_image(entry)
 
     if image is None or len(summary) < 300:
@@ -787,7 +1086,7 @@ async def send_entry(cat, channel, entry, relaxed=False):
             summary = page_text
 
     if image is None and cat["key"] in ("anime", "manga"):
-        look_in = entry.get("title", "") + ". " + summary
+        look_in = raw_title + ". " + summary
         image = await asyncio.to_thread(find_anime_image, look_in, cat["key"])
 
     if image:
@@ -795,11 +1094,19 @@ async def send_entry(cat, channel, entry, relaxed=False):
     else:
         print("No image found for:", link)
 
-    title, body = await asyncio.to_thread(
-        translate_pair,
-        entry.get("title", ""),
-        trim_to_sentence(summary, MAX_TEXT),
-    )
+    if verdict and verdict.get("title_ar"):
+        title, body = verdict["title_ar"], verdict.get("body_ar", "")
+    else:
+        title, body = await asyncio.to_thread(
+            translate_pair,
+            raw_title,
+            trim_to_sentence(summary, MAX_TEXT),
+        )
+
+    if DRY_RUN:
+        print(f"[dry-run] would post to {cat['name']}: {title} | {link}")
+        return True
+
     mark_seen(entry)
 
     description = f"**{title}**\n\n{body}\n\n[المصدر]({link})"
@@ -822,17 +1129,21 @@ async def send_entry(cat, channel, entry, relaxed=False):
             embed.set_image(url=image)
 
     try:
-        if file:
-            await channel.send(embed=embed, file=file)
-        else:
+        try:
+            if file:
+                await channel.send(embed=embed, file=file)
+            else:
+                await channel.send(embed=embed)
+        except discord.Forbidden:
+            print("Missing permission! Give the bot 'Attach Files' in this channel/role.")
+            if image:
+                embed.set_image(url=image)
+            else:
+                embed.remove_image()
             await channel.send(embed=embed)
-    except discord.Forbidden:
-        print("Missing permission! Give the bot 'Attach Files' in this channel/role.")
-        if image:
-            embed.set_image(url=image)
-        else:
-            embed.remove_image()
-        await channel.send(embed=embed)
+    except Exception:
+        unmark_seen(entry)      # ما نجح الإرسال: نرجّع الخبر يtry في التشغيل الجاي
+        raise
 
     now_utc = discord.utils.utcnow()
     last_post_at[cat["key"]] = now_utc
@@ -849,7 +1160,7 @@ def _pause_translation():
 
 
 async def post_category(cat):
-    global relaxed_run_total
+    global relaxed_run_total, posted_total
     channel_id = cat["channel"]
     if not channel_id:
         return
@@ -880,30 +1191,37 @@ async def post_category(cat):
             link = entry.get("link")
             if not link or is_duplicate(entry):
                 dup += 1
+                run_stats["duplicates"] += 1
                 continue
-            kind = classify(entry, cat, spec)
+            why = []
+            kind = classify(entry, cat, spec, why)
             if kind == "essential":
-                if essential_posted >= MAX_PER_CATEGORY:
+                if (essential_posted >= min(MAX_PER_CATEGORY, MAX_PER_CATEGORY_PER_RUN)
+                        or posted_total >= MAX_TOTAL_PER_RUN):
                     continue   # الباقي ينتظر التشغيل الجاي (ما ينعلّم كمرسل، فما يفوت)
                 try:
-                    await send_entry(cat, channel, entry)
+                    if await send_entry(cat, channel, entry):
+                        essential_posted += 1
+                        n_essential += 1
+                        posted_total += 1
+                        run_stats["posted"] += 1
+                        run_stats["essential"] += 1
                 except TranslationUnavailable:
                     _pause_translation()
                     return
-                essential_posted += 1
-                n_essential += 1
             elif kind == "side":
                 side_candidates.append(entry)
                 n_side += 1
             else:
                 unmatched += 1
+                run_stats["rejected"] += 1
                 if len(samples) < 3:
-                    samples.append(entry.get("title", "")[:90])
+                    samples.append((entry.get("title", "")[:90], why[0] if why else ""))
 
         print(f"[{cat['key']}] {url} -> scanned {scanned}, already sent {dup}, "
               f"ESSENTIAL posted {n_essential}, side candidates {n_side}, rejected {unmatched}")
-        for t in samples:
-            print("      rejected e.g.:", t)
+        for t, r in samples:
+            print("      rejected e.g.:", t, "|", r)
 
     # ---- 2) الجانبي: بس إذا ما نزل أساسي، والقناة ساكتة ساعة، وأقصى حد 2
     if essential_posted or not side_candidates:
@@ -916,7 +1234,10 @@ async def post_category(cat):
 
     day_ago = discord.utils.utcnow() - datetime.timedelta(hours=24)
     done_today = len([t for t in relaxed_recent.get(cat["key"], []) if t > day_ago])
-    allowed = min(RELAXED_MAX, RELAXED_PER_DAY - done_today, RELAXED_TOTAL_PER_RUN - relaxed_run_total)
+    allowed = min(RELAXED_MAX, RELAXED_PER_DAY - done_today,
+                  RELAXED_TOTAL_PER_RUN - relaxed_run_total,
+                  min(MAX_PER_CATEGORY, MAX_PER_CATEGORY_PER_RUN) - essential_posted)
+    allowed = min(allowed, MAX_TOTAL_PER_RUN - posted_total)
     if allowed <= 0:
         print(f"[{cat['key']}] quiet, but the side-news limit is reached "
               f"(today {done_today}/{RELAXED_PER_DAY}, this run {relaxed_run_total}/{RELAXED_TOTAL_PER_RUN})")
@@ -931,19 +1252,56 @@ async def post_category(cat):
         if is_duplicate(entry):
             continue
         try:
-            await send_entry(cat, channel, entry, relaxed=True)
+            if await send_entry(cat, channel, entry, relaxed=True):
+                side_posted += 1
+                relaxed_run_total += 1
+                posted_total += 1
+                run_stats["posted"] += 1
+                run_stats["side"] += 1
+                print(f"[{cat['key']}] side post:", entry.get("title", "")[:90])
         except TranslationUnavailable:
             _pause_translation()
             return
-        side_posted += 1
-        relaxed_run_total += 1
-        print(f"[{cat['key']}] side post:", entry.get("title", "")[:90])
+
+
+async def handle_blocked_message(msg, cat):
+    """خبر علّمه المستخدم بتفاعل (❌): يتحجّب من جدار الحظر ونحذفه من القناة."""
+    description = ""
+    title = ""
+    if msg.embeds:
+        description = msg.embeds[0].description or ""
+        title = description.split("\n")[0].replace("**", "").strip()
+    links = re.findall(r"\]\((https?://[^)\s]+)\)", description)
+    if not links:
+        return False
+    link = links[-1]
+
+    if link not in BLOCKLIST["links"]:
+        BLOCKLIST["links"].append(link)
+    if title and title not in BLOCKLIST["titles"]:
+        BLOCKLIST["titles"].append(title)
+    BLOCKLIST["history"].append({
+        "title": title,
+        "link": link,
+        "channel": cat["name"],
+        "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    })
+    del BLOCKLIST["history"][:-200]
+    save_json_file(BLOCKLIST_FILE, BLOCKLIST)
+
+    if title:
+        BLOCK_TITLES.add(norm_title(title))
+    BLOCK_LINKS.add(normalize_url(link))
+    print(f"[{cat['key']}] blocked by reaction -> {title[:90]}")
+    return True
 
 
 async def preload_seen_from_channels():
     """يقرأ آخر رسائل البوت في القنوات ويسجّل روابط أخبارها كأنها انرسلت.
-    حماية من التكرار حتى لو فشل حفظ seen.json (مهم على GitHub Actions)."""
+    حماية من التكرار حتى لو فشل حفظ seen.json (مهم على GitHub Actions).
+    وبنفس الفرصة: أي خبر عليه تفاعل حجب من المستخدم ينحذف ويتسجل في قائمة الحظر."""
     added = 0
+    to_delete = []
     for cat in CATEGORIES:
         cid = cat["channel"]
         if not cid:
@@ -966,23 +1324,55 @@ async def preload_seen_from_channels():
                         if key not in seen_links:
                             seen_links[key] = None
                             added += 1
+                # المستخدم علّم الخبر بتفاعل = ما يبغاه
+                if BLOCK_REACTIONS:
+                    marked = any(
+                        str(r.emoji) in BLOCK_REACTIONS
+                        for r in (getattr(msg, "reactions", None) or [])
+                    )
+                    if marked and await handle_blocked_message(msg, cat):
+                        to_delete.append(msg)
             history_ok[cat["key"]] = True
         except discord.Forbidden:
             print("Cannot read history in", cat["name"],
                   "- give the bot 'Read Message History' for extra duplicate protection.")
         except Exception as e:
             print("Could not read history for", cat["name"], ":", e)
+
+    if to_delete and DELETE_BLOCKED:
+        for msg in to_delete:
+            try:
+                await msg.delete()
+                print("Deleted a blocked message")
+            except discord.Forbidden:
+                print("Missing 'Manage Messages' permission - cannot delete blocked messages.")
+            except Exception as e:
+                print("Could not delete the blocked message:", e)
     print("Loaded", added, "links from recent channel messages")
 
 
 async def run_all_categories():
-    global relaxed_run_total
+    global relaxed_run_total, posted_total
     relaxed_run_total = 0
+    posted_total = 0
+    for key in run_stats:
+        run_stats[key] = 0
     for cat in CATEGORIES:
         try:
             await post_category(cat)
         except Exception as e:
             print("Error in category", cat["name"], ":", e)
+    summary = {
+        "posted": run_stats["posted"],
+        "essential": run_stats["essential"],
+        "side": run_stats["side"],
+        "rejected": run_stats["rejected"],
+        "duplicates": run_stats["duplicates"],
+        "dry_run": DRY_RUN,
+        "llm_check": LLM_CHECK,
+        "version": BOT_VERSION,
+    }
+    print("===SUMMARY===", json.dumps(summary, ensure_ascii=False))
 
 
 @tasks.loop(minutes=CHECK_EVERY_MINUTES)
