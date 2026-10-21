@@ -9,6 +9,10 @@ on:
         description: "تجربة بدون إرسال (يطبع فقط وش كان بينزل)"
         type: boolean
         default: false
+      test_message:
+        description: "إرسال رسالة اختبار في قناة الألعاب فقط (ما يرسل أخبار)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -40,6 +44,8 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          TEST_MESSAGE: ${{ inputs.test_message }}
+          TEST_CHANNEL_ID: ${{ secrets.GAMES_CHANNEL_ID }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GAMES_CHANNEL_ID: ${{ secrets.GAMES_CHANNEL_ID }}
           ANIME_CHANNEL_ID: ${{ secrets.ANIME_CHANNEL_ID }}
