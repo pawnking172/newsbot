@@ -72,7 +72,8 @@
     "questions": true,  // أسئلة وقوائم
     "promos": true,     // محتوى ترويجي ومسابقات
     "spoilers": true,   // حرق
-    "personal": true    // مقالات شخصية ومعلومات ما تهم
+    "personal": true,   // مقالات شخصية ومعلومات ما تهم
+    "features": true    // مقالات ومواضيع (مو خبر): "The History of...", "How X changed..."
   }
 }
 ```
