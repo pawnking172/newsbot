@@ -19,7 +19,8 @@
     "questions": true,
     "promos": true,
     "spoilers": true,
-    "personal": true
+    "personal": true,
+    "features": true
   },
   "noise_patterns": [],
 
