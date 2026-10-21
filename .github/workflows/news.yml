@@ -2,8 +2,13 @@ name: News bot
 
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "7,37 * * * *"   # كل 30 دقيقة
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "تجربة بدون إرسال (يطبع فقط وش كان بينزل)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,9 +20,11 @@ concurrency:
 jobs:
   post-news:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # نحتاج تاريخ كامل عشان الـ rebase قبل الرفع
 
       - uses: actions/setup-python@v5
         with:
@@ -31,19 +38,57 @@ jobs:
         env:
           RUN_ONCE: "1"
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GAMES_CHANNEL_ID: ${{ secrets.GAMES_CHANNEL_ID }}
           ANIME_CHANNEL_ID: ${{ secrets.ANIME_CHANNEL_ID }}
           MANGA_CHANNEL_ID: ${{ secrets.MANGA_CHANNEL_ID }}
           MOVIES_CHANNEL_ID: ${{ secrets.MOVIES_CHANNEL_ID }}
-        run: python news_bot.py
+          MUSIC_CHANNEL_ID: ${{ secrets.MUSIC_CHANNEL_ID }}
+          LLM_CHECK: ${{ secrets.LLM_CHECK }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -o pipefail
+          python news_bot.py 2>&1 | tee bot.log
+          if grep -q '===SUMMARY===' bot.log; then
+            echo "### ملخص آخر تشغيل" >> $GITHUB_STEP_SUMMARY
+            grep '===SUMMARY===' bot.log | sed 's/===SUMMARY=== //' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Save the list of sent news
         if: always()
         run: |
-          if [ -f seen.json ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add seen.json
-            git diff --cached --quiet || (git commit -m "update seen list" && git push)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add seen.json || true
+          git add blocklist.json || true
+          if git diff --cached --quiet; then
+            echo "no changes to save"
+          else
+            git commit -m "update bot state"
+            # لو حد عدّل الريبو بنفسنا، نسحب قبل ما نرفع
+            for i in 1 2 3; do
+              git pull --rebase origin "${GITHUB_REF_NAME:-main}" && git push && break
+              echo "push failed, retry $i"
+              sleep 5
+            done
+          fi
+
+      - name: Notify Discord about the failure
+        if: failure()
+        continue-on-error: true
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          LOG_CHANNEL_ID: ${{ secrets.LOG_CHANNEL_ID }}
+        run: |
+          if [ -n "$LOG_CHANNEL_ID" ] && [ -n "$DISCORD_TOKEN" ]; then
+            curl -s -X POST "https://discord.com/api/v10/channels/$LOG_CHANNEL_ID/messages" \
+              -H "Authorization: Bot $DISCORD_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"content":"⚠️ فشل تشغيل بوت الأخبار. شوف سجل الـ Actions."}' > /dev/null || true
+            echo "sent the failure alert"
+          else
+            echo "no LOG_CHANNEL_ID secret - skipping the alert"
           fi
