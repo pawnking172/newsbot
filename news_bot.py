@@ -141,6 +141,15 @@ NOISE_GROUPS = {
     "spoilers": [    # حرق
         r"\bspoiler", r"\bplot twist\b", r"\bending explained\b", r"\bfinale explained\b",
     ],
+    "features": [    # مقالات ومواضيع (مو خبر)
+        r"^how .+ (allowed|changed|made|redefined|shaped|transformed|revived)\b",
+        r"^(the (story|history|rise|evolution|legacy|future|weird) of|inside|a look at|remember|looking back)\b",
+        r"^(ranking|ranked|best|worst|every|all)\b",
+        r"\bthen vs\b", r"\bnow vs\b",
+        r"\bwhat (we|you|they) (learned|know|got wrong|missed)\b",
+        r"^who (is|are|was|were)\b", r"\brevisits?\b", r"\brecap(s|ped)?\b",
+        r"\b(celebrating|honoring|remembering) (the|a|our)\b",
+    ],
     "personal": [    # مقالات شخصية ومعلومات ما تهم
         r"^I\b", r"\bI (still )?(haven't|have not|didn't|don't|couldn't|wouldn't|can't)\b",
         r"\bI 've (been|had|played|bought|watched)\b", r"\b\d+ years? after\b",
@@ -263,7 +272,8 @@ ESSENTIAL_MOVIES = [
     r"\bpremieres?\b", r"\bcoming to\b", r"\bdated\b", r"\breleases?\b", r"now streaming", r"\bunveil",
     r"\bnow (on|streaming|playing|available)\b", r"\bin (cinemas|theaters|theatres)\b",
     r"\bpicked? up\b", r"\bin production\b", r"\brenewed\b", r"\bfootage\b",
-    r"\bpost-?credits?\b", r"\bstreaming\b", r"\bnow on\b",
+    r"\bpost-?credits?\b", r"\bstreaming (service|platform|app)\b", r"\bnow on\b",
+    r"\bdebuts?\b", r"\badds? (a )?new",
     r"\bnew (film|movie|series)\b",
 ]
 
