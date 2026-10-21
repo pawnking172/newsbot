@@ -55,12 +55,14 @@ MUSIC_CHANNEL_ID = _cfg_int("MUSIC_CHANNEL_ID")
 CHECK_EVERY_MINUTES = _cfg_int("CHECK_EVERY_MINUTES", 30)
 MAX_PER_FEED = _cfg_int("MAX_PER_FEED", 2)
 MAX_TEXT = _cfg_int("MAX_TEXT", 1200)
-QUIET_MINUTES = _cfg_int("QUIET_MINUTES", 30)           # إذا القسم سكت أكثر من كذا دقيقة نرخّي الفلتر
-RELAXED_MAX = _cfg_int("RELAXED_MAX", 3)                # أقصى عدد "مختارات" لكل قسم في المرة
+QUIET_MINUTES = _cfg_int("QUIET_MINUTES", 60)           # الأخبار الجانبية تنزل بس إذا القناة ساكتة كذا دقيقة
+RELAXED_MAX = _cfg_int("RELAXED_MAX", 2)                # أقصى عدد أخبار جانبية لكل قناة في المرة
 RELAXED_TOTAL_PER_RUN = _cfg_int("RELAXED_TOTAL_PER_RUN", 8)  # أقصى عدد "مختارات" في المرة (كل الأقسام)
-RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 8)        # أقصى عدد "مختارات" لكل قسم في اليوم
-MAX_PER_CATEGORY = _cfg_int("MAX_PER_CATEGORY", 6)      # أقصى عدد أخبار لكل قسم في المرة الواحدة
+RELAXED_PER_DAY = _cfg_int("RELAXED_PER_DAY", 4)        # أقصى عدد أخبار جانبية لكل قناة في اليوم
+MAX_PER_CATEGORY = _cfg_int("MAX_PER_CATEGORY", 10)     # أقصى عدد أخبار أساسية لكل قناة في المرة (الباقي ينتظر)
 RELAXED_TAG = "مختارات"                                 # الكلمة اللي تظهر أسفل الأخبار الشبه أساسية
+
+BOT_VERSION = "v18-three-tiers"
 
 # RUN_ONCE=1 يعني: يشتغل مرة وحدة ويقفل (وضع GitHub Actions)
 RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
@@ -69,261 +71,230 @@ RUN_ONCE = os.environ.get("RUN_ONCE") == "1"
 DEFAULT_IMAGES = getattr(_settings, "DEFAULT_IMAGES", {}) if _settings else {}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# إشارات "إشادة ونجاح": تقييمات عالية، مديح النقاد، مبيعات وإيرادات كبيرة...
-# أي خبر فيها يمر في كل الأقسام (بشرط ما يكون في قوائم المنع)
-PRAISE_PATTERNS = [
-    r"\bacclaim", r"\bpraise", r"\braves?\b", r"rave review", r"universal acclaim",
-    r"\bmasterpiece", r"best[- ]reviewed", r"highest[- ]rated", r"top[- ]rated",
-    r"perfect score", r"\b10/10\b", r"overwhelmingly positive", r"very positive",
-    r"\bmetacritic", r"opencritic", r"rotten tomatoes", r"standing ovation",
-    r"\bbrilliant", r"\bstunning", r"\bexcellent", r"\bfantastic", r"\bsuperb", r"\btriumph",
-    r"must[- ](play|watch|read)", r"game of the year", r"\bgoty\b", r"fan[- ]favou?rite",
-    r"\bbeloved\b", r"smash hit", r"runaway hit", r"surprise hit", r"sleeper hit",
-    r"critics (love|praise|rave|call|hail)", r"fans (love|praise|rave|hail)", r"\bhailed\b",
-    r"million (copies|players|units|views)", r"\bbox office\b", r"\b#1\b",
-    r"tops? (the )?(charts?|box office|rankings?)", r"record[- ]breaking",
-]
+# =====================================================================
+#   قواعد الأخبار — نفس القواعد لكل القنوات (أنمي، ألعاب، أفلام، مانجا)
+#   1) أساسي : ينزل أول بأول ولا يفوت (إصدار جديد، DLC، تكملة، تريلر، موعد...)
+#   2) جانبي : تقييمات/أفضل الأعمال المشهورة فقط. ينزل بس إذا القناة ساكتة ساعة،
+#              وأقصى حد 2 في المرة.
+#   3) ممنوع : أي شيء عن الممثلين والحياة الشخصية والأخبار التافهة.
+# =====================================================================
 
-# ممنوع في الأنمي والمانجا: حياة شخصية للممثلين والفنانين، وفيات، فضائح، ومواضيع جانبية
-ANIME_BLOCK_TITLE = [
+# ---------- 3) ممنوع نهائياً (يُطبّق على كل القنوات، على العنوان) ----------
+BLOCK_ALL_TITLE = [
+    # حياة شخصية
     r"\bpregnan", r"\b(gives?|gave) birth\b", r"\bfirst (child|baby)\b", r"\bsecond (child|baby)\b",
-    r"\bexpecting (a|her|his|their|first|second)\b",
-    r"\bgets? married\b", r"\bgot married\b", r"\bmarries\b",
-    r"\b(announces?|reveals?) (her|his|their) (marriage|engagement|wedding|divorce|pregnancy)\b",
-    r"\bengaged\b", r"\bdivorc", r"\bdating\b",
-    r"\b(voice actor|voice actress|actor|actress|seiyuu|idol|singer|mangaka|creator|director|composer|author|artist)\b"
-    r".*\b(dies|passes away|passed away|has died|hospitalized|diagnosed|arrested)\b",
-    r"\bobituar", r"\bfuneral\b", r"\bscandal\b", r"\barrest(ed|s)?\b", r"\bfeud\b",
-    r"\blawsuit\b", r"\bsues?\b", r"\bbirthday\b",
-    r"\bcosplay", r"\bmeme", r"\btiktok", r"\binstagram",
-    r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b",
-    r"\bkickstarter", r"\bcrowdfund", r"\bmerch", r"\bfigures?\b", r"\bgoods\b",
-    r"\bcollab", r"\bcafe\b", r"\bpop-?up\b",
+    r"\bexpecting (a|her|his|their|first|second)\b", r"\bbaby\b",
+    r"\bgets? married\b", r"\bgot married\b", r"\bmarries\b", r"\bwedding\b", r"\bengaged\b",
+    r"\bengagement\b", r"\bdivorc", r"\bdating\b", r"\bbreak ?up\b", r"\bsplits? (from|with|up)\b",
+    r"\b(announces?|reveals?) (her|his|their) (marriage|engagement|wedding|divorce|pregnancy|retirement)\b",
+    r"\bpasses away\b", r"\bpassed away\b", r"\bhas died\b", r"\bobituar", r"\bfuneral\b", r"\bin memoriam\b",
+    r"\b(actor|actress|seiyuu|idol|singer|mangaka|creator|director|composer|author|artist|designer|legend)\b"
+    r".*\b(dies|dead)\b",
+    r"\barrest(ed|s)?\b", r"\bscandal\b", r"\bhospitali[sz]ed\b", r"\bcancer\b", r"\brehab\b",
+    r"\bfeud\b", r"\blawsuit\b", r"\bsues?\b", r"\bnet worth\b", r"\bbirthday\b",
+    # ممثلين (ممنوع نهائياً)
+    r"\bactors?\b", r"\bactress(es)?\b", r"\bvoice (actor|actress|cast)\b", r"\bseiyuu\b",
+    r"\bcast(s|ing)?\b", r"\bstarring\b", r"\bco-?stars?\b", r"\bstars? (in|as|of)\b",
+    r"\bjoins (the )?(cast|film|movie|series|show)\b", r"\bportray", r"\b(his|her|their|the) role\b", r"\bbiopic\b",
+    # مقابلات وأحاديث شخصية
+    r"\binterview\b", r"\bon (playing|portraying|becoming|being|how|why)\b",
+    r"\b(talks about|opens up|reflects on|responds to|admits|reacts to)\b",
+    # سوشال ومواضيع جانبية
+    r"\bcosplay", r"\bmeme", r"\btiktok", r"\binstagram", r"\btweet", r"\breddit\b", r"\bstreamer",
+    r"\btwitch\b", r"\byoutuber", r"\bred carpet\b", r"\bfashion\b", r"\boutfit",
+    # أعمال وتجارة وعروض
+    r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b", r"\bunion\b", r"\bmerch", r"\bfigures?\b", r"\bgoods\b",
+    r"\bdeals?\b", r"\bdiscount", r"\bcoupon", r"\bcollab", r"\bcafe\b", r"\bpop-?up\b",
+    # شروحات وذكريات قديمة
+    r"\bguide\b", r"how to", r"\bwhere to\b", r"\bwalkthrough", r"\btips?\b", r"tier list",
+    r"\bexplained\b", r"easter eggs?", r"\byears? (ago|later)\b", r"\banniversary", r"\brewatch",
+    r"\bforgotten\b", r"\bthrowback", r"retrospective", r"\bpodcast", r"\bdocumentary",
 ]
-ANIME_BLOCK_TEXT = [
+BLOCK_ALL_TEXT = [   # في الملخص: عبارات شخصية صريحة فقط
     r"\bis pregnant\b", r"\bgave birth\b", r"\bgives birth\b", r"\bpregnancy\b",
     r"\btheir (first|second) child\b", r"\b(her|his) marriage\b", r"\bgot married\b",
     r"\bannounced (her|his|their) (marriage|engagement)\b",
 ]
 
-# كل قسم: اسمه، القناة، لون الشريط، المصادر، وكلمات اختيارية للتصفية
+# عنوان فيلم يبدأ باسم شخص ثم فعل أو 's  (مثل: Tom Cruise Confirms) = خبر ممثل = ممنوع
+_NAME = r"[A-Z][A-Za-z'’\-]+(?: [A-Z]\.)? [A-Z][A-Za-z'’\-]+(?: (?:Jr|Sr|II|III|IV)\.?)?"
+PERSON_FIRST = re.compile(
+    r"^(" + _NAME + r")(?:['’]s\b|\s+(?i:on|says|said|reveals|talks|joins|stars|plays|responds|explains|"
+    r"admits|opens|teases|confirms|reacts|addresses|shares|wants|hopes|lands|is|was|has|gets|gives|"
+    r"takes|returns|will|may|might|reportedly|set)\b)"
+)
+STUDIO_FIRST = {
+    "marvel", "disney", "pixar", "warner", "netflix", "universal", "sony", "paramount", "lionsgate",
+    "a24", "hbo", "apple", "amazon", "legendary", "lucasfilm", "dc", "nintendo", "crunchyroll", "toho",
+    "ghibli", "studio", "box", "hollywood", "oscars", "oscar", "cannes", "sundance", "venice", "toronto",
+}
+
+# ---------- 2) الجانبي: لازم عمل مشهور ----------
+FAMOUS = [
+    # ألعاب
+    "zelda", "mario", "pokemon", "pokémon", "elden ring", "dark souls", "sekiro", "bloodborne", "gta",
+    "grand theft auto", "red dead", "call of duty", "fortnite", "minecraft", "hollow knight", "silksong",
+    "baldur's gate", "cyberpunk", "witcher", "final fantasy", "resident evil", "street fighter",
+    "mortal kombat", "god of war", "the last of us", "uncharted", "assassin's creed", "battlefield",
+    "apex legends", "valorant", "league of legends", "genshin", "honkai", "persona", "metal gear",
+    "kingdom hearts", "dragon quest", "monster hunter", "smash bros", "animal crossing", "splatoon",
+    "stardew valley", "hades", "celeste", "undertale", "among us", "roblox", "fifa", "ea sports fc",
+    "nba 2k", "madden", "halo", "forza", "gran turismo", "the sims", "civilization", "starfield",
+    "fallout", "skyrim", "doom", "bioshock", "destiny", "overwatch", "diablo", "world of warcraft",
+    "borderlands", "death stranding", "horizon", "ratchet", "sonic", "crash bandicoot", "tekken",
+    "silent hill", "palworld", "helldivers", "black myth", "clair obscur", "expedition 33", "ghost of",
+    "marvel's spider-man", "the legend of zelda", "metroid", "kirby", "donkey kong", "fire emblem",
+    # أنمي ومانجا
+    "one piece", "naruto", "boruto", "bleach", "dragon ball", "attack on titan", "demon slayer",
+    "kimetsu", "jujutsu kaisen", "my hero academia", "chainsaw man", "spy x family", "frieren",
+    "solo leveling", "death note", "fullmetal alchemist", "hunter x hunter", "fairy tail", "black clover",
+    "tokyo ghoul", "sword art online", "one punch man", "mob psycho", "dr. stone", "haikyuu", "blue lock",
+    "kaiju no. 8", "dandadan", "oshi no ko", "vinland saga", "berserk", "vagabond", "slam dunk",
+    "evangelion", "gundam", "cowboy bebop", "steins;gate", "re:zero", "konosuba", "overlord",
+    "mushoku tensei", "bocchi", "edgerunners", "studio ghibli", "ghibli", "detective conan", "doraemon",
+    "jojo", "tokyo revengers", "my happy marriage", "apothecary diaries", "kaiju", "gintama", "monster",
+    # أفلام
+    "marvel", "avengers", "spider-man", "batman", "superman", "joker", "star wars", "avatar", "dune",
+    "harry potter", "lord of the rings", "the hobbit", "the matrix", "john wick", "mission: impossible",
+    "mission impossible", "fast & furious", "fast and furious", "jurassic", "transformers", "toy story",
+    "frozen", "pixar", "oppenheimer", "barbie", "godzilla", "king kong", "alien", "terminator", "rocky",
+    "james bond", "indiana jones", "top gun", "deadpool", "x-men", "fantastic four", "thunderbolts",
+    "black panther", "guardians of the galaxy", "wicked", "sinners", "weapons", "wonder woman",
+    "mortal kombat", "the odyssey", "michael",
+]
+FAMOUS_RE = re.compile(r"(?<![\w])(" + "|".join(re.escape(f) for f in FAMOUS) + r")(?![\w])")
+
+# علامات شهرة: أرقام كبيرة وجوائز وتقييمات
+POPULARITY = [
+    r"\bmillion\b", r"\bbillion\b", r"best-?sell", r"\b#1\b", r"number one",
+    r"most[- ](popular|watched|played|anticipated)", r"top[- ]selling", r"award[- ]winning",
+    r"game of the year", r"\bgoty\b", r"\boscars?\b", r"academy award", r"golden globe",
+    r"\bcannes\b", r"metacritic", r"opencritic", r"rotten tomatoes", r"steam charts", r"\bbox office\b",
+]
+# عنوان الخبر الجانبي: تقييم / مديح / أفضل / مبيعات
+SIDE_TITLE = [
+    r"\breviews?\b", r"\bmetacritic", r"opencritic", r"rotten tomatoes", r"\bscores?\b", r"\bratings?\b",
+    r"\bacclaim", r"\bpraise", r"\braves?\b", r"\bmasterpiece", r"\bhailed\b", r"highest[- ]rated",
+    r"best[- ]reviewed", r"top[- ]rated", r"perfect score", r"\b10/10\b", r"overwhelmingly positive",
+    r"review[- ]bomb", r"\bmixed\b", r"\bnegative\b", r"\bbest\b", r"\bgreatest\b",
+    r"\bgame of the year\b", r"\bgoty\b", r"\bof the year\b", r"\branked\b", r"\bbox office\b",
+    r"\bsells?\b", r"\bsales\b", r"million (copies|players|units|views)", r"record[- ]breaking",
+]
+BEST_OF_YEAR = [   # قوائم "أفضل ... هذي السنة" تعتبر مشهورة بحد ذاتها
+    r"\bbest\b.*\b(of (the )?year|of 20\d\d|this year|so far)\b", r"\bgame of the year\b", r"\bgoty\b",
+    r"\b(best|top|greatest)\b.*\b20\d\d\b",
+]
+# للمصادر اللي كلها مراجعات: نقبل بس المراجعات الإيجابية
+PRAISE_PATTERNS = [
+    r"\bacclaim", r"\bpraise", r"\braves?\b", r"\bmasterpiece", r"best[- ]reviewed", r"highest[- ]rated",
+    r"top[- ]rated", r"perfect score", r"\b10/10\b", r"overwhelmingly positive", r"very positive",
+    r"\bbrilliant", r"\bstunning", r"\bexcellent", r"\bfantastic", r"\bsuperb", r"\btriumph",
+    r"must[- ](play|watch|read)", r"game of the year", r"\bgoty\b", r"fan[- ]favou?rite", r"\bbeloved\b",
+    r"\bhailed\b", r"\bgreat\b", r"\bamazing\b", r"\bessential\b",
+]
+
+# ---------- 1) الأساسي: الأحداث اللي ما نبي تفوتنا (على العنوان) ----------
+ESSENTIAL_GAMES = [
+    r"release date", r"\breleases?\b", r"\blaunch(es|ed|ing)?\b", r"\bout now\b", r"\bavailable now\b",
+    r"\bnow (live|available)\b", r"\bcoming to\b", r"\barrives?\b", r"\bannounc", r"\bre(veal|vealed|veals)\b",
+    r"\bunveil", r"\bnew game\b", r"\bsequel\b", r"\bremake\b", r"\bremaster", r"\bdlc\b", r"\bexpansion",
+    r"\bupdate\b", r"\bpatch\b", r"\bseason \d", r"\btrailer", r"\bgameplay", r"\bteaser", r"\bdemo\b",
+    r"\bbeta\b", r"early access", r"\bplaytest", r"\bdirect\b", r"state of play", r"\bshowcase",
+    r"\bdelay", r"\bcancel", r"\bkickstarter", r"\bsteam page\b",
+]
+ESSENTIAL_ANIME = [
+    r"\bannounc", r"\breveal", r"\bseasons?\b", r"\bsequel", r"\bnew anime\b",
+    r"\banime\b.*\b(gets|reveals|announces|premieres|debuts|returns|ends|delayed|confirmed)\b",
+    r"\bgets?\b.*\b(anime|season|film|movie|ova)\b", r"\bpremiere", r"\btrailer", r"\bteaser", r"\bpv\b",
+    r"\bvisual\b", r"release date", r"\bto (premiere|debut|air|launch|return|stream|release)\b", r"\bdelay",
+    r"\bfilm\b", r"\bova\b", r"\bona\b", r"\breturns?\b", r"\bfinale\b", r"\bnow streaming\b",
+    r"\bgreenlit\b", r"\bconfirm",
+]
+ESSENTIAL_MANGA = [
+    r"\bannounc", r"\breveal", r"\bnew manga\b", r"\bnew series\b", r"\bsequel", r"spin-?off", r"\breturns?\b",
+    r"\bresum", r"\bhiatus", r"\bfinal (chapter|volume|arc)\b", r"\bends\b", r"\bending\b",
+    r"\bgets?\b.*\b(anime|adaptation|sequel|spin-?off)\b", r"\bserializ", r"\blaunch",
+    r"\bnew (chapter|volume|arc)\b", r"\bvolume \d+", r"\brelease", r"\bcomplete", r"\bconclude",
+    r"\bcancel", r"\bdelay",
+]
+ESSENTIAL_MOVIES = [
+    r"\btrailer", r"\bteaser", r"release date", r"sets? release", r"\bannounc", r"\bgreenlit",
+    r"\bsequel", r"\bprequel", r"\breboot", r"\bremake", r"first look", r"\bposter", r"in theaters",
+    r"\bpremieres?\b", r"\bcoming to\b", r"\bdated\b", r"\breleases?\b", r"now streaming", r"\bunveil",
+]
+
+# ---------- الأقسام ----------
+# spec لكل مصدر: "trusted" = المصدر كله مواضيع القسم (ما نطلب كلمات الموضوع)
+#                "require_any" = شرط خاص بالمصدر
 CATEGORIES = [
     {
-        "name": "أخبار المانجا",
-        "key": "manga",
-        "channel": MANGA_CHANNEL_ID,
-        "color": 0xE67E22,
+        "name": "أخبار المانجا", "key": "manga", "channel": MANGA_CHANNEL_ID, "color": 0xE67E22,
         "feeds": [
             "https://www.animenewsnetwork.com/all/rss.xml",
             "https://otakuusamagazine.com/feed/",
-            {"url": "https://animecorner.me/feed/", "loose": True, "max": 1},
+            "https://animecorner.me/feed/",
         ],
-        "keywords": ["manga", "manhwa", "manhua", "light novel", "webtoon"],
-        # أخبار مهمة: إعلانات، اقتباس أنمي، نهاية مانجا، توقف، جوائز، مبيعات ضخمة
-        "require_title_groups": [
-            [
-                r"\bannounc", r"\breveal", r"\bgets?\b", r"\banime\b", r"\badaptation", r"live-action",
-                r"\bfinal\b", r"\bending\b", r"\bends\b", r"\bhiatus", r"\bresum", r"\bsequel",
-                r"spin-?off", r"\bnew manga\b", r"\bserializ", r"\blaunch", r"\bvolumes?\b",
-                r"\bwins?\b", r"\bawards?\b", r"\bnominee", r"million copies", r"\bcomplete",
-                r"\bconclude", r"\bcancel", r"\bdelay", r"\bfilm\b", r"\bmovie\b",
-            ],
-        ],
-        # لما القسم يسكت: مبيعات، ترتيبات، أفضل المانجا، مراجعات
-        "relaxed_title_groups": [
-            [
-                r"\brank", r"\bsales\b", r"\bbest\b", r"\btop\b", r"best-?sell", r"\breview",
-                r"\bawards?\b", r"\bmost\b", r"\bpoll\b", r"\bsurvey\b", r"\bmillion\b",
-            ],
-        ],
-        "block_title": ANIME_BLOCK_TITLE,
-        "block_text": ANIME_BLOCK_TEXT,
+        "topic": [r"\bmanga\b", r"manhwa", r"manhua", r"light novel", r"webtoon"],
+        "essential": ESSENTIAL_MANGA,
+        "block": [r"\blive-?action\b", r"\bbox office\b", r"\bhollywood\b", r"\bnetflix\b",
+                  r"\bkickstarter", r"\bcrowdfund"],
     },
     {
-        "name": "أخبار الأنمي",
-        "key": "anime",
-        "channel": ANIME_CHANNEL_ID,
-        "color": 0xFF6B9D,
+        "name": "أخبار الأنمي", "key": "anime", "channel": ANIME_CHANNEL_ID, "color": 0xFF6B9D,
         "feeds": [
             "https://www.animenewsnetwork.com/all/rss.xml",
             "https://myanimelist.net/rss/news.xml",
-            {"url": "https://animecorner.me/feed/", "loose": True, "max": 1},
+            {"url": "https://animecorner.me/feed/", "trusted": True},
         ],
-        "keywords": None,
-        # لازم الخبر يتكلم عن أنمي فعلاً (يمنع أفلام الممثلين الحقيقيين وأخبار الألعاب)
-        "require_groups": [
-            [r"\banime\b", r"\bova\b", r"\bona\b", r"crunchyroll", r"ghibli",
-             r"\bseiyuu\b", r"\bvoice (actor|actress)\b"],
-        ],
-        # أخبار مهمة: أنمي جديد، موسم، تريلر، موعد عرض، فيلم، تأجيل، فريق العمل...
-        "require_title_groups": [
-            [
-                r"\bannounc", r"\breveal", r"\bseasons?\b", r"\bsequel", r"\bnew anime\b",
-                r"\banime\b.*\b(gets|reveals|announces|premieres|debuts|returns|ends|delayed|confirmed)\b",
-                r"\bgets?\b.*\b(anime|season|film|movie|ova)\b", r"\bpremiere", r"\btrailer",
-                r"\bpv\b", r"\bvisual\b", r"release date", r"\bto (premiere|debut|air|launch|return|stream)\b",
-                r"\bdelay", r"\bfilm\b", r"\bmovie\b", r"\bova\b", r"\bcast\b", r"\bstaff\b",
-                r"\bconfirm", r"\breturns?\b", r"\bfinale\b", r"\bending\b", r"\bstreaming\b",
-            ],
-        ],
-        # لما القسم يسكت: ترتيبات، مبيعات، جوائز، أفضل الأنمي، مراجعات
-        "relaxed_title_groups": [
-            [
-                r"\brank", r"\bsales\b", r"\bbest\b", r"\btop\b", r"\bawards?\b", r"\breview",
-                r"box office", r"\bviewership", r"\bpoll\b", r"\bsurvey\b", r"\bmost\b", r"\bmillion\b",
-            ],
-        ],
-        "block_title": ANIME_BLOCK_TITLE + [r"\blive-?action\b"],
-        "block_text": ANIME_BLOCK_TEXT,
+        "topic": [r"\banime\b", r"\bova\b", r"\bona\b", r"crunchyroll", r"ghibli"],
+        "essential": ESSENTIAL_ANIME,
+        "block": [r"\blive-?action\b", r"\bhollywood\b", r"\bnintendo\b", r"\bswitch 2?\b", r"\bplaystation\b",
+                  r"\bxbox\b", r"\bsteam\b", r"\bps[45]\b", r"\bzelda\b", r"\bkickstarter", r"\bcrowdfund"],
     },
     {
-        "name": "أخبار الألعاب",
-        "key": "games",
-        "channel": GAMES_CHANNEL_ID,
-        "color": 0x5865F2,
+        "name": "أخبار الألعاب", "key": "games", "channel": GAMES_CHANNEL_ID, "color": 0x5865F2,
         "feeds": [
-            # مواقع كلها ألعاب: نقبل كل أخبارها إلا اللي في قائمة المنع (حد أقصى 1 لكل مصدر)
-            {"url": "https://www.gamespot.com/feeds/news/", "loose": True, "max": 1},
-            {"url": "https://www.eurogamer.net/feed/news", "loose": True, "max": 1},
+            {"url": "https://www.gamespot.com/feeds/news/", "trusted": True},
+            {"url": "https://www.eurogamer.net/feed/news", "trusted": True},
             # ألعاب مستقلة (Indie): لازم الخبر يذكر indie أو demo أو early access...
-            {"url": "https://www.rockpapershotgun.com/feed/news", "loose": True, "max": 1,
-             "require_any": [r"\bindie\b", r"early access", r"\bdemo\b", r"kickstarter",
-                             r"next fest", r"solo dev", r"small studio", r"\bwishlist",
-                             r"debut game", r"first game"]},
-            {"url": "https://indiegamesplus.com/feed", "loose": True, "max": 1},
-            # مراجعات ألعاب: ياخذ بس اللي وصفها إيجابي (إشادة، تقييم عالي...)
-            {"url": "https://www.gamespot.com/feeds/reviews/", "loose": True, "max": 1,
-             "require_any": PRAISE_PATTERNS},
-            {"url": "https://www.eurogamer.net/feed/reviews", "loose": True, "max": 1,
-             "require_any": PRAISE_PATTERNS},
-            # موقع مختلط (أفلام وكتب): يبقى بالفلتر الشديد
+            {"url": "https://www.rockpapershotgun.com/feed/news", "trusted": True,
+             "require_any": [r"\bindie\b", r"early access", r"\bdemo\b", r"kickstarter", r"next fest",
+                             r"solo dev", r"small studio", r"\bwishlist", r"debut game", r"first game"]},
+            {"url": "https://indiegamesplus.com/feed", "trusted": True},
+            # مراجعات: نقبل بس اللي وصفها إيجابي
+            {"url": "https://www.gamespot.com/feeds/reviews/", "trusted": True, "require_any": PRAISE_PATTERNS},
+            {"url": "https://www.eurogamer.net/feed/reviews", "trusted": True, "require_any": PRAISE_PATTERNS},
             "https://www.polygon.com/rss/index.xml",
         ],
-        "keywords": None,
-        # لازم الخبر يتكلم عن ألعاب
-        "require_groups": [
-            [
-                r"\bgames?\b", r"\bgaming\b", r"playstation", r"\bps[45]\b", r"xbox",
-                r"nintendo", r"\bswitch\b", r"\bsteam\b", r"\bdlc\b", r"\bconsoles?\b",
-            ],
-        ],
-        # ولازم العنوان يدل على حدث مهم: إصدار/إعلان/تريلر/تحديث كبير/مراجعة...
-        "require_title_groups": [
-            [
-                r"release date", r"\blaunch", r"\bannounc", r"\breveal", r"\btrailer",
-                r"\bgameplay", r"\bdelay", r"\breview", r"\bupdate", r"\bpatch",
-                r"\bdlc\b", r"expansion", r"\bremake", r"\bremaster", r"\bsequel",
-                r"\bbeta\b", r"early access", r"game awards", r"\bgoty\b",
-                r"game of the year", r"coming (to|in|out)", r"\bout now", r"available now",
-                r"\bpreview", r"\bdemo\b", r"shadow ?drop", r"nintendo direct",
-                r"state of play", r"showcase", r"\bfree\b", r"\bbest\b.*\bgames?\b",
-                r"\bgreatest\b.*\bgames?\b",
-            ],
-        ],
-        # المستوى الثاني (لما القسم يسكت): تقييمات، أرقام، قوائم أفضل الألعاب...
-        "relaxed_title_groups": [
-            [
-                r"\breview", r"metacritic", r"opencritic", r"\bscores?\b", r"\bratings?\b",
-                r"review bomb", r"backlash", r"mixed", r"negative", r"\bpositive",
-                r"\bbest\b", r"\bgreatest\b", r"\btop\b", r"\branked\b", r"\bworst\b",
-                r"most anticipated", r"\bsold\b", r"million (copies|players)", r"\brecord\b",
-                r"peak", r"\bsales\b",
-            ],
-        ],
-        "relaxed_block_title": [
-            r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b",
-            r"\bnetflix\b", r"\bhbo\b", r"\bdisney\+?", r"\bepisodes?\b", r"\bpodcast",
-            r"\bdocumentary", r"\bcomics?\b", r"\bguide\b", r"how to", r"\bwalkthrough",
-            r"\bdeals?\b", r"\bdiscount", r"\bcoupon", r"\bcosplay", r"\bmeme",
-            r"\blawsuit", r"\bsues?\b", r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b",
-            r"\bdies\b", r"\bobituar",
-        ],
-        # يرفض العنوان إذا فيه: أفلام/مسلسلات/كتب، أو قوائم وشروحات ومواضيع جانبية
-        "block_title": [
-            r"^\d+\s", r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b",
-            r"\bnetflix\b", r"\bhbo\b", r"\bdisney\+?", r"\bepisodes?\b", r"\bsitcom",
-            r"\bpodcast", r"\bdocumentary", r"\bcomics?\b",
-            r"\bguide\b", r"how to", r"\bwhere to\b", r"\bwalkthrough", r"\btips?\b",
-            r"tier list", r"\bexplained\b", r"easter eggs?", r"\bdeals?\b", r"\bdiscount",
-            r"\bcoupon", r"\bcosplay", r"\bmeme", r"\bfans? (react|react|are)\b", r"\btweet",
-            r"\breddit\b", r"\bstreamer", r"\btwitch\b", r"\byoutuber",
-            r"\blawsuit", r"\bsues?\b", r"\blayoffs?\b", r"\bunion\b", r"\bstock\b",
-            r"\bearnings\b", r"\bdies\b", r"\bobituar",
-        ],
+        "topic": [r"\bgames?\b", r"\bgaming\b", r"playstation", r"\bps[45]\b", r"xbox", r"nintendo",
+                  r"\bswitch\b", r"\bsteam\b", r"\bdlc\b", r"\bconsoles?\b"],
+        "essential": ESSENTIAL_GAMES,
+        "block": [r"\bfilms?\b", r"\bmovies?\b", r"\btv\b", r"\bnovels?\b", r"\bbooks?\b", r"\bnetflix\b",
+                  r"\bhbo\b", r"\bdisney\+?", r"\bepisodes?\b", r"\bsitcom", r"\bcomics?\b",
+                  r"\bbox office\b", r"\bhollywood\b"],
     },
     {
-        "name": "أخبار الأفلام",
-        "key": "movies",
-        "channel": MOVIES_CHANNEL_ID,
-        "color": 0xE74C3C,
+        "name": "أخبار الأفلام", "key": "movies", "channel": MOVIES_CHANNEL_ID, "color": 0xE74C3C,
         "feeds": [
             "https://www.slashfilm.com/feed/",
             "https://deadline.com/feed/",
             "https://variety.com/v/film/feed/",
         ],
-        "keywords": None,
-        # لازم الخبر يتكلم عن فيلم
-        "require_groups": [
-            [r"\bfilm", r"\bmovie"],
-        ],
-        # ولازم العنوان يدل على: إصدار/تريلر/إيرادات/مراجعة/مهرجان/أوسكار...
-        "require_title_groups": [
-            [
-                r"\btrailer", r"\bteaser", r"release date", r"sets? release", r"box office",
-                r"opening weekend", r"opens? (to|with|in)", r"\bpremiere", r"\bsequel",
-                r"\bprequel", r"\breboot", r"\bremake", r"first look", r"\bposter",
-                r"\breview", r"\bfestival", r"\boscars?\b", r"\bgreenlit", r"coming (to|in)",
-                r"in theaters", r"\bdebuts?",
-            ],
-        ],
-        # المستوى الثاني (لما القسم يسكت): قوائم أفضل الأفلام، تقييمات، أرقام...
-        "relaxed_title_groups": [
-            [
-                r"\bbest\b", r"\bgreatest\b", r"\btop\b", r"\branked\b", r"\bworst\b",
-                r"\bunderrated", r"\bclassics?\b", r"must[- ]watch", r"rotten tomatoes",
-                r"\bscores?\b", r"\bratings?\b", r"\breview", r"\brecord\b",
-                r"highest[- ]grossing", r"\bgrossing\b", r"\bmasterpiece",
-            ],
-        ],
-        "relaxed_block_title": [
-            r"\bdating\b", r"\bdivorc", r"\bmarri", r"\bwedding", r"\bengag", r"\bpregnan",
-            r"\bbaby\b", r"\barrest", r"\blawsuit", r"\bsues?\b", r"\bfeud", r"net worth",
-            r"\bdies\b", r"\bdeath\b", r"\bdead\b", r"obituar", r"funeral", r"\brehab",
-            r"scandal", r"break ?up", r"\bsplit\b", r"instagram", r"tiktok", r"red carpet",
-            r"\boutfit", r"\bfashion", r"\bactors?\b", r"\bactress", r"predictions?",
-            r"contenders", r"season \d", r"\bepisode", r"showrunner", r"\bsitcom",
-            r"tv series", r"tv show", r"series finale", r"\blayoffs?\b", r"\bstock\b",
-            r"\bearnings\b", r"\bconcert", r"\bsong\b", r"\balbum",
-        ],
-        # يرفض العنوان إذا فيه: أخبار ممثلين شخصية، مسلسلات، قوائم، ذكريات قديمة، أعمال
-        "block_title": [
-            r"^\d+\s", r"years? (ago|later)", r"\banniversary", r"\brewatch", r"\bunderrated",
-            r"\bforgotten", r"\bclassic\b", r"\bdecades?\b", r"\bflop\b", r"retrospective",
-            r"throwback", r"\bexplained\b", r"\bending\b", r"of all time", r"\branked\b",
-            r"\bdating\b", r"\bdivorc", r"\bmarri", r"\bwedding", r"\bengag", r"\bpregnan",
-            r"\bbaby\b", r"\barrest", r"\blawsuit", r"\bsues?\b", r"\bfeud", r"net worth",
-            r"\bdies\b", r"\bdeath\b", r"\bdead\b", r"obituar", r"funeral", r"\brehab",
-            r"scandal", r"break ?up", r"\bsplit\b", r"instagram", r"tiktok", r"red carpet",
-            r"\boutfit", r"\bfashion",
-            r"season \d", r"\bepisode", r"showrunner", r"\bsitcom", r"tv series", r"tv show",
-            r"series finale", r"\blayoffs?\b", r"\bstock\b", r"\bearnings\b",
-        ],
+        "topic": [r"\bfilms?\b", r"\bmovies?\b"],
+        "essential": ESSENTIAL_MOVIES,
+        "block_person_first": True,
+        "block": [r"\bvideo games?\b", r"\banime\b", r"\bmanga\b", r"\bseason \d", r"\bepisodes?\b",
+                  r"\bshowrunner", r"\bsitcom", r"tv series", r"tv show", r"series finale", r"\bconcert",
+                  r"\bsong\b", r"\balbum", r"\bpredictions?\b", r"\bcontenders\b"],
     },
     {
-        "name": "أخبار الموسيقى",
-        "key": "music",
-        "channel": MUSIC_CHANNEL_ID,
-        "color": 0x1ABC9C,
-        "feeds": [
-            "https://www.billboard.com/feed/",
-            "https://pitchfork.com/feed/feed-news/rss",
-        ],
-        "keywords": None,
+        "name": "أخبار الموسيقى", "key": "music", "channel": MUSIC_CHANNEL_ID, "color": 0x1ABC9C,
+        "feeds": ["https://www.billboard.com/feed/", "https://pitchfork.com/feed/feed-news/rss"],
+        "topic": None,
+        "essential": [r"\balbum\b", r"\bnew song\b", r"\bsingle\b", r"release date", r"\bannounc"],
+        "block": [],
     },
 ]
-
-for _c in CATEGORIES:
-    _c.setdefault("praise_ok", True)
 
 SEEN_FILE = "seen.json"
 SCAN_ENTRIES = 30
@@ -749,52 +720,50 @@ def find_anime_image(text, kind):
     return None
 
 
-def passes_filter(entry, cat, relaxed=False, opts=None):
-    """هل الخبر يناسب القسم؟
-    relaxed=False: الفلتر الشديد (أخبار مهمة وجديدة).
-    relaxed=True : فلتر أرخى لأخبار "شبه أساسية" (قوائم أفضل أفلام، تقييمات...)."""
-    title = entry.get("title", "").lower()
-    text = title + " " + clean_html(entry.get("summary", "")).lower()
+def classify(entry, cat, spec=None):
+    """يصنّف الخبر: "essential" (أساسي) أو "side" (جانبي) أو None (ممنوع / ما يناسب القسم)."""
+    spec = spec or {}
+    raw_title = entry.get("title", "").strip()
+    title = raw_title.lower()
+    summary = clean_html(entry.get("summary", "")).lower()
+    text = title + " " + summary
 
-    opts = opts or {}
-    loose = bool(opts.get("loose")) and not relaxed   # مصدر كله مواضيع القسم: نكتفي بقوائم المنع
-
-    keywords = cat.get("keywords")
-    if keywords and not any(k in text for k in keywords):
-        return False
-
-    # شرط خاص بمصدر معيّن (مثلاً: لازم يذكر indie)
-    require_any = opts.get("require_any")
-    if require_any and not any(re.search(pat, text) for pat in require_any):
-        return False
-
-    if not loose:
-        for group in cat.get("require_groups") or []:
-            if not any(re.search(pat, text) for pat in group):
-                return False
-
-    # مجموعات لازم تظهر في العنوان نفسه
-    if relaxed:
-        title_groups = cat.get("relaxed_title_groups") or []
-        block = cat.get("relaxed_block_title", cat.get("block_title")) or []
-    else:
-        title_groups = cat.get("require_title_groups") or []
-        block = cat.get("block_title") or []
-
-    # مسار الإشادة: خبر فيه تقييم عالي/مديح/نجاح كبير يمر حتى لو عنوانه ما فيه كلمة حدث
-    praise = (not relaxed) and cat.get("praise_ok") and any(re.search(pat, text) for pat in PRAISE_PATTERNS)
-
-    if not loose and not praise:
-        for group in title_groups:
-            if not any(re.search(pat, title) for pat in group):
-                return False
-    for pat in block:
+    # 3) ممنوع نهائياً: ممثلين، حياة شخصية، مقابلات، أخبار تافهة
+    for pat in BLOCK_ALL_TITLE + (cat.get("block") or []):
         if re.search(pat, title):
-            return False
-    for pat in cat.get("block_text") or []:
+            return None
+    for pat in BLOCK_ALL_TEXT:
         if re.search(pat, text):
-            return False
-    return True
+            return None
+    if cat.get("block_person_first"):
+        mp = PERSON_FIRST.match(raw_title)
+        if mp:
+            name = mp.group(1).lower()
+            if name.split()[0] not in STUDIO_FIRST and not FAMOUS_RE.search(name):
+                return None
+
+    # لازم يكون عن موضوع القسم (إلا المصادر اللي كلها مواضيع القسم)
+    topic = cat.get("topic")
+    if topic and not spec.get("trusted") and not any(re.search(p, text) for p in topic):
+        return None
+    require_any = spec.get("require_any")
+    if require_any and not any(re.search(p, text) for p in require_any):
+        return None
+
+    # 1) أساسي
+    if any(re.search(p, title) for p in cat.get("essential") or []):
+        return "essential"
+
+    # 2) جانبي: تقييم/أفضل/مبيعات، لعمل مشهور فقط
+    if any(re.search(p, title) for p in SIDE_TITLE):
+        famous = (
+            FAMOUS_RE.search(text) is not None
+            or any(re.search(p, text) for p in POPULARITY)
+            or any(re.search(p, title) for p in BEST_OF_YEAR)
+        )
+        if famous:
+            return "side"
+    return None
 
 
 def hours_since_last_post(cat):
@@ -892,50 +861,52 @@ async def post_category(cat):
         print(f"Channel not found: {channel_id} ({cat['name']}). Check the ID and bot permissions.")
         return
 
-    parsed_feeds = []
-    posted_total = 0
+    essential_posted = 0
+    side_candidates = []
 
-    # ---- المستوى الأول: الأخبار المهمة (الفلتر الشديد)
+    # ---- 1) الأساسي: ينزل أول بأول (وما يتأخر عن الجانبي)
     for spec in cat["feeds"]:
         spec = spec if isinstance(spec, dict) else {"url": spec}
         url = spec["url"]
-        feed_limit = spec.get("max", MAX_PER_FEED)
         feed = await asyncio.to_thread(feedparser.parse, url)
         if not feed.entries:
             print("No entries from this feed (maybe the link is wrong):", url)
             continue
-        parsed_feeds.append((spec, feed))
 
-        posted = scanned = dup = blocked = 0
-        blocked_samples = []
+        scanned = dup = unmatched = n_essential = n_side = 0
+        samples = []
         for entry in feed.entries[:SCAN_ENTRIES]:
-            if posted >= feed_limit or posted_total + posted >= MAX_PER_CATEGORY:
-                break
             scanned += 1
             link = entry.get("link")
             if not link or is_duplicate(entry):
                 dup += 1
                 continue
-            if not passes_filter(entry, cat, opts=spec):
-                blocked += 1
-                if len(blocked_samples) < 3:
-                    blocked_samples.append(entry.get("title", "")[:90])
-                continue
-            try:
-                await send_entry(cat, channel, entry)
-            except TranslationUnavailable:
-                _pause_translation()
-                return
-            posted += 1
+            kind = classify(entry, cat, spec)
+            if kind == "essential":
+                if essential_posted >= MAX_PER_CATEGORY:
+                    continue   # الباقي ينتظر التشغيل الجاي (ما ينعلّم كمرسل، فما يفوت)
+                try:
+                    await send_entry(cat, channel, entry)
+                except TranslationUnavailable:
+                    _pause_translation()
+                    return
+                essential_posted += 1
+                n_essential += 1
+            elif kind == "side":
+                side_candidates.append(entry)
+                n_side += 1
+            else:
+                unmatched += 1
+                if len(samples) < 3:
+                    samples.append(entry.get("title", "")[:90])
 
-        posted_total += posted
         print(f"[{cat['key']}] {url} -> scanned {scanned}, already sent {dup}, "
-              f"blocked by filter {blocked}, posted {posted}")
-        for t in blocked_samples:
-            print("      blocked e.g.:", t)
+              f"ESSENTIAL posted {n_essential}, side candidates {n_side}, rejected {unmatched}")
+        for t in samples:
+            print("      rejected e.g.:", t)
 
-    # ---- المستوى الثاني: إذا القسم ساكت، ننزل خبر "شبه أساسي" (قائمة أفضل، تقييم...)
-    if posted_total or not cat.get("relaxed_title_groups"):
+    # ---- 2) الجانبي: بس إذا ما نزل أساسي، والقناة ساكتة ساعة، وأقصى حد 2
+    if essential_posted or not side_candidates:
         return
     if not history_ok.get(cat["key"]):
         return   # ما نقدر نعرف آخر وقت نزل فيه خبر، فلا نغامر
@@ -943,41 +914,30 @@ async def post_category(cat):
     if quiet is not None and quiet * 60 < QUIET_MINUTES:
         return
 
-    # سقف "المختارات": لكل قسم في المرة، وللكل في المرة، ولكل قسم في اليوم
     day_ago = discord.utils.utcnow() - datetime.timedelta(hours=24)
     done_today = len([t for t in relaxed_recent.get(cat["key"], []) if t > day_ago])
-    allowed = min(
-        RELAXED_MAX,
-        RELAXED_PER_DAY - done_today,
-        RELAXED_TOTAL_PER_RUN - relaxed_run_total,
-    )
+    allowed = min(RELAXED_MAX, RELAXED_PER_DAY - done_today, RELAXED_TOTAL_PER_RUN - relaxed_run_total)
     if allowed <= 0:
-        print(f"[{cat['key']}] quiet, but the '{RELAXED_TAG}' limit is reached "
+        print(f"[{cat['key']}] quiet, but the side-news limit is reached "
               f"(today {done_today}/{RELAXED_PER_DAY}, this run {relaxed_run_total}/{RELAXED_TOTAL_PER_RUN})")
         return
 
     shown = "no previous posts" if quiet is None else f"{quiet * 60:.0f} min"
-    print(f"[{cat['key']}] quiet ({shown}) -> trying the relaxed filter (up to {allowed})")
-    relaxed_posted = 0
-    for spec, feed in parsed_feeds:
-        for entry in feed.entries[:SCAN_ENTRIES]:
-            if relaxed_posted >= allowed:
-                break
-            link = entry.get("link")
-            if not link or is_duplicate(entry):
-                continue
-            if not passes_filter(entry, cat, relaxed=True, opts=spec):
-                continue
-            try:
-                await send_entry(cat, channel, entry, relaxed=True)
-            except TranslationUnavailable:
-                _pause_translation()
-                return
-            relaxed_posted += 1
-            relaxed_run_total += 1
-            print(f"[{cat['key']}] relaxed post:", entry.get("title", "")[:90])
-        if relaxed_posted >= allowed:
+    print(f"[{cat['key']}] no essential news, quiet for {shown} -> side news (up to {allowed})")
+    side_posted = 0
+    for entry in side_candidates:
+        if side_posted >= allowed:
             break
+        if is_duplicate(entry):
+            continue
+        try:
+            await send_entry(cat, channel, entry, relaxed=True)
+        except TranslationUnavailable:
+            _pause_translation()
+            return
+        side_posted += 1
+        relaxed_run_total += 1
+        print(f"[{cat['key']}] side post:", entry.get("title", "")[:90])
 
 
 async def preload_seen_from_channels():
@@ -1036,7 +996,7 @@ _ready_done = False
 @bot.event
 async def on_ready():
     global _ready_done
-    print("Bot started:", bot.user)
+    print("Bot started:", bot.user, "| version:", BOT_VERSION)
     if RUN_ONCE:
         if _ready_done:
             return
