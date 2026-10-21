@@ -1,0 +1,11 @@
+# إعدادات محلية (توكن البوت وقنواته) - ما تنزل على GitHub أبداً
+settings.py
+*.local.py
+
+# ملفات مؤقتة وسجلات
+*.tmp
+bot.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
